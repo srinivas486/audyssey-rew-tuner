@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audyssey REW Tuner</title>
+  <style>
+    /* ============================================================
+       BASE RESET & TOKENS
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1f2937;
+      --border:    #21262d;
+      --accent:    #0ea5e9;
+      --accent2:   #2563eb;
+      --text:      #f9fafb;
+      --muted:     #9ca3af;
+      --success:   #22c55e;
+      --warn:      #f59e0b;
+      --error:     #ef4444;
+      --sub-border:#0ea5e9;
+    }
+
+    html { font-size: 15px; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 3rem;
+    }
+
+    /* ============================================================
+       LAYOUT
+    ============================================================ */
+    #app {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 1.25rem;
+    }
+
+    /* ============================================================
+       APP HEADER
+    ============================================================ */
+    #app-header {
+      padding: 2rem 0 1.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+    #app-header h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      display: inline-block;
+    }
+    #app-header p {
+      font-size: 0.8125rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+
+    /* ============================================================
+       COLLAPSIBLE PANELS
+    ============================================================ */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.875rem 1.25rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .panel-header:hover { background: var(--surface2); }
+
+    .panel-header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 600;
+      font-size: 0.9375rem;
+    }
+    .panel-toggle {
+      font-size: 0.75rem;
+      color: var(--muted);
+      transition: transform 0.2s;
+    }
+    .panel.open .panel-toggle { transform: rotate(180deg); }
+
+    .panel-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    .panel.open .panel-body { max-height: 9999px; }
+
+    .panel-inner {
+      padding: 1rem 1.25rem 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ============================================================
+       FORM ELEMENTS
+    ============================================================ */
+    label { font-size: 0.8125rem; color: var(--muted); display: block; margin-bottom: 0.3rem; }
+
+    input[type="text"], input[type="number"], select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 0.45rem 0.75rem;
+      font-size: 0.875rem;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus {
+      border-color: var(--accent);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    input[type="checkbox"] { accent-color: var(--accent); width: 1rem; height: 1rem; cursor: pointer; }
+
+    .field-row {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .field-group {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    /* ============================================================
+       BUTTONS
+    ============================================================ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1.1rem;
+      border-radius: 7px;
+      border: none;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn:not(:disabled):hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn:not(:disabled):active { transform: translateY(0); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+    }
+    .btn-primary:not(:disabled):hover {
+      box-shadow: 0 4px 16px rgba(14,165,233,0.3);
+    }
+
+    .btn-ghost {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-danger {
+      background: rgba(239,68,68,0.15);
+      color: var(--error);
+      border: 1px solid rgba(239,68,68,0.3);
+    }
+
+    /* ============================================================
+       STATUS BADGE
+    ============================================================ */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-connected    { background: rgba(34,197,94,0.15);  color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+    .badge-disconnected { background: rgba(239,68,68,0.15);  color: var(--error);   border: 1px solid rgba(239,68,68,0.3); }
+    .badge-pending      { background: rgba(156,163,175,0.15);color: var(--muted);   border: 1px solid var(--border); }
+    .badge-imported     { background: rgba(14,165,233,0.15); color: var(--accent);  border: 1px solid rgba(14,165,233,0.3); }
+    .badge-eq-ready     { background: rgba(34,197,94,0.15);  color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+    .badge-exported     { background: rgba(37,99,235,0.15);  color: #93c5fd;        border: 1px solid rgba(37,99,235,0.3); }
+
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; }
+
+    /* ============================================================
+       DROP ZONE
+    ============================================================ */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    #drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(14,165,233,0.05);
+    }
+    #drop-zone p { color: var(--muted); font-size: 0.875rem; margin-top: 0.5rem; }
+    #drop-zone .drop-icon { font-size: 2.2rem; }
+    #file-input { display: none; }
+
+    /* ============================================================
+       TABLES
+    ============================================================ */
+    .table-wrap { overflow-x: auto; margin-top: 1rem; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+    }
+    th {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      color: var(--muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr.sub-row td:first-child { border-left: 2px solid var(--sub-border); }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    /* ============================================================
+       ASCII PREVIEW
+    ============================================================ */
+    #curve-preview {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.75rem;
+      white-space: pre;
+      overflow-x: auto;
+      line-height: 1.4;
+      color: var(--accent);
+      min-height: 120px;
+      margin-top: 0.75rem;
+    }
+
+    /* ============================================================
+       ACTION CONSOLE
+    ============================================================ */
+    #console-panel {
+      position: sticky;
+      bottom: 0;
+      margin-top: 1rem;
+    }
+
+    #console-output {
+      background: #070b10;
+      border: 1px solid var(--border);
+      border-radius: 0 0 8px 8px;
+      height: 280px;
+      overflow-y: auto;
+      padding: 0.75rem 1rem;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.75rem;
+      line-height: 1.6;
+    }
+
+    .log-info    { color: var(--muted); }
+    .log-success { color: var(--success); }
+    .log-warn    { color: var(--warn); }
+    .log-error   { color: var(--error); }
+
+    .console-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      padding: 0.6rem 1rem;
+    }
+    .console-title { font-size: 0.8125rem; font-weight: 600; color: var(--muted); }
+
+    /* ============================================================
+       FILTER RESULTS
+    ============================================================ */
+    .channel-result {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+      overflow: hidden;
+    }
+    .channel-result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 1rem;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .channel-result-header:hover { background: rgba(255,255,255,0.03); }
+    .channel-result-body { display: none; padding: 0 1rem 1rem; }
+    .channel-result.open .channel-result-body { display: block; }
+
+    /* ============================================================
+       MISC HELPERS
+    ============================================================ */
+    .mt-1  { margin-top: 0.5rem; }
+    .mt-2  { margin-top: 1rem; }
+    .mt-3  { margin-top: 1.5rem; }
+    .flex  { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+    .flex-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+    .text-muted  { color: var(--muted); font-size: 0.8125rem; }
+    .text-accent { color: var(--accent); }
+    .text-success{ color: var(--success); }
+    .text-warn   { color: var(--warn); }
+    .text-error  { color: var(--error); }
+    .hidden      { display: none !important; }
+    hr.divider   { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+
+    /* per-channel override table */
+    #override-table input { padding: 0.3rem 0.5rem; font-size: 0.8rem; }
+    #override-table td { padding: 0.4rem 0.5rem; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ======================================================
+       APP HEADER
+  ====================================================== -->
+  <div id="app-header">
+    <h1>Audyssey REW Tuner</h1>
+    <p>Denon X3800H · MultEQ-X · REW API</p>
+  </div>
+
+  <!-- ======================================================
+       PANEL 1: REW CONNECTION
+  ====================================================== -->
+  <div class="panel open" id="panel-rew">
+    <div class="panel-header" onclick="togglePanel('panel-rew')">
+      <div class="panel-header-left">🔌 REW Connection</div>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-inner">
+        <div class="field-row">
+          <div class="field-group" style="max-width:160px">
+            <label for="rew-port">API Port</label>
+            <input type="number" id="rew-port" value="4735" min="1" max="65535" />
+          </div>
+          <div>
+            <button class="btn btn-ghost" onclick="testConnection()" style="margin-top:1.5rem">
+              Test Connection
+            </button>
+          </div>
+          <div style="margin-top:1.5rem">
+            <span id="conn-status" class="badge badge-pending"><span class="dot"></span>Not tested</span>
+          </div>
+        </div>
+        <div id="conn-message" class="text-muted mt-1" style="font-size:0.8rem"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       PANEL 2: ADY FILE
+  ====================================================== -->
+  <div class="panel open" id="panel-ady">
+    <div class="panel-header" onclick="togglePanel('panel-ady')">
+      <div class="panel-header-left">📁 ADY File</div>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-inner">
+        <!-- Drop zone -->
+        <div id="drop-zone"
+             onclick="document.getElementById('file-input').click()"
+             ondragover="onDragOver(event)"
+             ondragleave="onDragLeave(event)"
+             ondrop="onDrop(event)">
+          <div class="drop-icon">📂</div>
+          <strong>Drop .ady file here</strong>
+          <p>or click to browse</p>
+        </div>
+        <input type="file" id="file-input" accept=".ady,.json" onchange="onFileSelect(event)" />
+
+        <!-- Position selector (shown if multiple positions) -->
+        <div id="position-selector" class="mt-2 hidden">
+          <label for="position-select">Measurement Position</label>
+          <select id="position-select" style="max-width:240px" onchange="onPositionChange()">
+            <option value="0">MLP (position 0)</option>
+          </select>
+        </div>
+
+        <!-- Channel table -->
+        <div id="channel-table-wrap" class="table-wrap hidden">
+          <div class="flex-between mt-2">
+            <span class="text-muted" id="channel-count-label"></span>
+          </div>
+          <table id="channel-table">
+            <thead>
+              <tr>
+                <th>Channel</th>
+                <th>Distance (m)</th>
+                <th>Trim (dB)</th>
+                <th>Delay (ms)</th>
+                <th>Polarity</th>
+                <th>Type</th>
+                <th>Positions</th>
+              </tr>
+            </thead>
+            <tbody id="channel-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       PANEL 3: TARGET CURVE
+  ====================================================== -->
+  <div class="panel" id="panel-target">
+    <div class="panel-header" onclick="togglePanel('panel-target')">
+      <div class="panel-header-left">🎯 Target Curve</div>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-inner">
+
+        <div class="field-row">
+          <div class="field-group" style="max-width:260px">
+            <label for="curve-preset">Preset</label>
+            <select id="curve-preset" onchange="onPresetChange()">
+              <option value="flat">Flat (Reference)</option>
+              <option value="harman" selected>Harman Home</option>
+              <option value="house05">House Curve (−0.5 dB/oct)</option>
+              <option value="house10">House Curve (−1.0 dB/oct)</option>
+              <option value="xcurve">X-Curve (Cinema)</option>
+              <option value="csv">Custom CSV</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Custom CSV upload -->
+        <div id="csv-upload-row" class="mt-2 hidden">
+          <label>Custom CSV (frequency,dB pairs)</label>
+          <input type="file" id="csv-file" accept=".csv,.txt" onchange="onCSVLoad(event)"
+                 style="display:block; margin-top:0.3rem; color:var(--muted); font-size:0.8125rem" />
+          <div id="csv-status" class="text-muted mt-1" style="font-size:0.8rem"></div>
+        </div>
+
+        <hr class="divider" />
+
+        <!-- Shelf adjustments -->
+        <div class="field-row mt-1">
+          <div class="field-group">
+            <label for="bass-freq">Bass Shelf Frequency (Hz)</label>
+            <input type="number" id="bass-freq" value="60" min="20" max="120" oninput="updateCurvePreview()" />
+          </div>
+          <div class="field-group">
+            <label for="bass-gain">Bass Shelf Gain (dB): <span id="bass-gain-val">0</span></label>
+            <input type="range" id="bass-gain" min="0" max="6" step="0.5" value="0"
+                   oninput="document.getElementById('bass-gain-val').textContent=this.value; updateCurvePreview()" />
+          </div>
+          <div class="field-group">
+            <label for="treble-freq">Treble Shelf Start (Hz)</label>
+            <input type="number" id="treble-freq" value="8000" min="1000" max="18000" oninput="updateCurvePreview()" />
+          </div>
+          <div class="field-group">
+            <label for="treble-gain">Treble Rolloff (dB): <span id="treble-gain-val">0</span></label>
+            <input type="range" id="treble-gain" min="-3" max="0" step="0.5" value="0"
+                   oninput="document.getElementById('treble-gain-val').textContent=this.value; updateCurvePreview()" />
+          </div>
+        </div>
+
+        <!-- ASCII preview -->
+        <div id="curve-preview" aria-label="Target curve ASCII preview"></div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       PANEL 4: EQ SETTINGS
+  ====================================================== -->
+  <div class="panel" id="panel-eq">
+    <div class="panel-header" onclick="togglePanel('panel-eq')">
+      <div class="panel-header-left">⚙️ EQ Settings</div>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-inner">
+        <div class="field-row">
+          <div class="field-group">
+            <label for="eq-profile">Equaliser Profile</label>
+            <select id="eq-profile">
+              <option value="multieq-x" selected>MultEQ-X (20 bands)</option>
+              <option value="audyssey">Standard Audyssey (8 bands)</option>
+              <option value="generic">Generic PEQ</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="eq-smoothing">Smoothing</label>
+            <select id="eq-smoothing">
+              <option value="1/6">1/6 octave</option>
+              <option value="1/12" selected>1/12 octave</option>
+              <option value="1/24">1/24 octave</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row mt-2">
+          <div class="field-group">
+            <label for="eq-max-cut">Max Cut: <span id="eq-cut-val">−10</span> dB</label>
+            <input type="range" id="eq-max-cut" min="-20" max="-6" step="1" value="-10"
+                   oninput="document.getElementById('eq-cut-val').textContent=this.value" />
+          </div>
+          <div class="field-group">
+            <label for="eq-max-boost">Max Boost: <span id="eq-boost-val">+3</span> dB</label>
+            <input type="range" id="eq-max-boost" min="0" max="6" step="1" value="3"
+                   oninput="document.getElementById('eq-boost-val').textContent='+'+this.value" />
+          </div>
+          <div class="field-group">
+            <label for="eq-freq-lo">Low Cutoff (Hz)</label>
+            <input type="number" id="eq-freq-lo" value="20" min="10" max="500" />
+          </div>
+          <div class="field-group">
+            <label for="eq-freq-hi">High Cutoff (Hz)</label>
+            <input type="number" id="eq-freq-hi" value="20000" min="1000" max="24000" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       PANEL 5: SUBWOOFER
+  ====================================================== -->
+  <div class="panel" id="panel-sub">
+    <div class="panel-header" onclick="togglePanel('panel-sub')">
+      <div class="panel-header-left">🔊 Subwoofer</div>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-inner">
+        <div class="field-row">
+          <div class="field-group" style="max-width:220px">
+            <label for="sub-xover">Crossover Frequency (Hz)</label>
+            <input type="number" id="sub-xover" value="80" min="20" max="200" />
+          </div>
+          <div class="field-group" style="flex:0; align-self:flex-end; padding-bottom:0.1rem">
+            <label class="flex" style="flex-direction:row; gap:0.4rem; margin-bottom:0; align-items:center; cursor:pointer">
+              <input type="checkbox" id="sub-xover-auto" checked onchange="onSubAutoChange()" />
+              <span>Auto-detect from ADY</span>
+            </label>
+          </div>
+        </div>
+        <div class="field-row mt-2">
+          <div class="field-group">
+            <label for="sub-gain">Sub Integration Gain: <span id="sub-gain-val">0</span> dB</label>
+            <input type="range" id="sub-gain" min="0" max="6" step="0.5" value="0"
+                   oninput="document.getElementById('sub-gain-val').textContent=this.value" />
+          </div>
+          <div class="field-group" style="flex:0; align-self:flex-end; padding-bottom:0.2rem">
+            <label class="flex" style="flex-direction:row; gap:0.4rem; margin-bottom:0; align-items:center; cursor:pointer">
+              <input type="checkbox" id="sub-polarity" />
+              <span>Flip Sub Polarity</span>
+            </label>
+          </div>
+          <div class="field-group" style="flex:0; align-self:flex-end; padding-bottom:0.2rem">
+            <label class="flex" style="flex-direction:row; gap:0.4rem; margin-bottom:0; align-items:center; cursor:pointer">
+              <input type="checkbox" id="sub-group" checked />
+              <span>Group SW1+SW2</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       PANEL 6: PER-CHANNEL OVERRIDES
+  ====================================================== -->
+  <div class="panel" id="panel-overrides">
+    <div class="panel-header" onclick="togglePanel('panel-overrides')">
+      <div class="panel-header-left">📻 Per-Channel Overrides</div>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-inner">
+        <div id="override-placeholder" class="text-muted" style="font-size:0.875rem">
+          Load an ADY file to see per-channel overrides.
+        </div>
+        <div class="table-wrap hidden" id="override-table-wrap">
+          <table id="override-table">
+            <thead>
+              <tr>
+                <th>Enable EQ</th>
+                <th>Channel</th>
+                <th>Distance Override (m)</th>
+                <th>Trim Override (dB)</th>
+              </tr>
+            </thead>
+            <tbody id="override-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       PANEL 7: ACTIONS
+  ====================================================== -->
+  <div class="panel open" id="panel-actions">
+    <div class="panel-header" onclick="togglePanel('panel-actions')">
+      <div class="panel-header-left">▶️ Actions</div>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-inner">
+        <div class="flex mt-1">
+          <button class="btn btn-primary" id="btn-import" onclick="importToREW()" disabled>
+            📡 Import to REW
+          </button>
+          <button class="btn btn-primary" id="btn-eq" onclick="runEQMatching()" disabled>
+            🎛️ Run EQ Matching
+          </button>
+          <button class="btn btn-primary" id="btn-export" onclick="exportADY()" disabled>
+            💾 Export Tuned ADY
+          </button>
+        </div>
+        <div class="mt-2">
+          <label class="flex" style="flex-direction:row; gap:0.5rem; align-items:center; cursor:pointer; width:fit-content">
+            <input type="checkbox" id="cleanup-rew" />
+            <span style="font-size:0.8125rem; color:var(--muted)">Clear imported measurements from REW after export</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       FILTER RESULTS PREVIEW
+  ====================================================== -->
+  <div class="panel" id="panel-filters">
+    <div class="panel-header" onclick="togglePanel('panel-filters')">
+      <div class="panel-header-left">📊 Filter Results</div>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-inner">
+        <div id="filters-placeholder" class="text-muted" style="font-size:0.875rem">
+          Run EQ Matching to see generated filters.
+        </div>
+        <div id="filters-content" class="hidden">
+          <div class="flex-between mb-1" style="margin-bottom:0.75rem">
+            <span class="text-muted" id="filters-summary"></span>
+            <button class="btn btn-ghost" style="font-size:0.75rem" onclick="copyFiltersJSON()">
+              📋 Copy all as JSON
+            </button>
+          </div>
+          <div id="filter-channels"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       ACTION CONSOLE (sticky)
+  ====================================================== -->
+  <div id="console-panel">
+    <div class="console-header">
+      <span class="console-title">📟 Action Console</span>
+      <button class="btn btn-ghost" style="font-size:0.75rem; padding:0.25rem 0.6rem"
+              onclick="clearConsole()">Clear</button>
+    </div>
+    <div id="console-output"></div>
+  </div>
+
+</div><!-- /#app -->
+
+<script>
+/* ============================================================
+   STATE
+============================================================ */
+const state = {
+  rewPort: 4735,
+  connected: false,
+  rewVersion: null,
+
+  adyRaw: null,          // original parsed JSON (unmodified)
+  adyFilename: '',
+  channels: [],          // extracted channel objects
+  positionIndex: 0,      // which IR position to use (MLP = 0)
+
+  channelUUIDs: {},      // commandId → REW measurement UUID
+  importedCount: 0,
+
+  customCurvePoints: [], // [[freq, dB], ...] from CSV
+  targetCurveCache: [],  // computed target curve [[freq, dB]]
+
+  generatedFilters: {},  // commandId → FilterSetting[]
+  channelStatus: {},     // commandId → 'pending'|'imported'|'eq-ready'|'exported'
+
+  overrides: {},         // commandId → { enabled, distance, trim }
+};
+
+/* ============================================================
+   PANEL TOGGLE
+============================================================ */
+function togglePanel(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+/* ============================================================
+   ACTION CONSOLE
+============================================================ */
+function log(msg, level = 'info') {
+  const out = document.getElementById('console-output');
+  const now = new Date();
+  const ts = now.toTimeString().slice(0,8);
+  const div = document.createElement('div');
+  div.className = `log-${level}`;
+  div.textContent = `[${ts}] ${msg}`;
+  out.appendChild(div);
+  out.scrollTop = out.scrollHeight;
+}
+
+function clearConsole() {
+  document.getElementById('console-output').innerHTML = '';
+}
+
+/* ============================================================
+   REW API WRAPPER
+============================================================ */
+async function rewAPI(method, path, body = null) {
+  const port = document.getElementById('rew-port').value || 4735;
+  const url = `http://localhost:${port}${path}`;
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (body !== null) opts.body = JSON.stringify(body);
+
+  log(`${method} ${path}`, 'info');
+
+  let res;
+  try {
+    res = await fetch(url, opts);
+  } catch (e) {
+    log(`✗ Network error on ${method} ${path}: ${e.message}`, 'error');
+    throw e;
+  }
+
+  let data;
+  try {
+    const text = await res.text();
+    data = text ? JSON.parse(text) : {};
+  } catch (_) {
+    data = {};
+  }
+
+  if (!res.ok) {
+    const msg = data?.message || data?.error || res.statusText;
+    log(`✗ ${res.status} ${method} ${path}: ${msg}`, 'error');
+    throw Object.assign(new Error(msg), { status: res.status, data });
+  }
+
+  log(`✓ ${res.status} ${method} ${path}`, 'success');
+  return data;
+}
+
+/* ============================================================
+   CONNECTION
+============================================================ */
+async function testConnection() {
+  const port = document.getElementById('rew-port').value;
+  state.rewPort = parseInt(port, 10);
+  localStorage.setItem('rew_port', port);
+
+  const statusEl = document.getElementById('conn-status');
+  const msgEl    = document.getElementById('conn-message');
+
+  statusEl.className = 'badge badge-pending';
+  statusEl.innerHTML = '<span class="dot"></span>Testing…';
+  msgEl.textContent = '';
+
+  try {
+    const data = await rewAPI('GET', '/application');
+    state.connected = true;
+    state.rewVersion = data?.version || data?.title || 'REW';
+    statusEl.className = 'badge badge-connected';
+    statusEl.innerHTML = `<span class="dot"></span>Connected — ${state.rewVersion}`;
+    msgEl.textContent = '';
+    log(`Connected to REW ${state.rewVersion}`, 'success');
+    updateActionButtons();
+  } catch (e) {
+    state.connected = false;
+    statusEl.className = 'badge badge-disconnected';
+    statusEl.innerHTML = '<span class="dot"></span>Disconnected';
+    msgEl.textContent = 'Start REW, go to Preferences → API → Enable API Server';
+    log('REW not reachable. Enable API Server in REW Preferences.', 'error');
+  }
+}
+
+/* ============================================================
+   ADY PARSE
+============================================================ */
+function onDragOver(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('dragover');
+}
+function onDragLeave(e) {
+  document.getElementById('drop-zone').classList.remove('dragover');
+}
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processADYFile(file);
+}
+function onFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) processADYFile(file);
+}
+
+function processADYFile(file) {
+  state.adyFilename = file.name;
+  log(`Loading ADY file: ${file.name}`, 'info');
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const json = JSON.parse(e.target.result);
+      parseADY(json);
+    } catch (err) {
+      log(`Failed to parse ADY file: ${err.message}`, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseADY(json) {
+  if (!json.detectedChannels || !Array.isArray(json.detectedChannels)) {
+    log('Invalid ADY file: missing detectedChannels array', 'error');
+    return;
+  }
+  if (json.detectedChannels.length === 0) {
+    log('Invalid ADY file: detectedChannels array is empty', 'error');
+    return;
+  }
+
+  state.adyRaw = json;
+  state.channels = json.detectedChannels.map(ch => ({
+    commandId:        ch.commandId || 'UNKNOWN',
+    distance:         ch.channelReport?.distance ?? null,
+    trim:             ch.channelReport?.trimAdjustment ?? null,
+    delay:            ch.channelReport?.delayAdjustment ?? null,
+    isReversePolarity:ch.channelReport?.isReversePolarity ?? false,
+    responseData:     ch.responseData || [],
+    peqFilters:       ch.peqFilters   || [],
+    _raw:             ch,
+  }));
+
+  // detect max positions across all channels
+  const maxPos = Math.max(...state.channels.map(c => c.responseData.length), 1);
+
+  // build position selector
+  const selWrap = document.getElementById('position-selector');
+  const sel     = document.getElementById('position-select');
+  sel.innerHTML = '';
+  if (maxPos > 1) {
+    for (let i = 0; i < maxPos; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = i === 0 ? `MLP (position 0)` : `Position ${i}`;
+      sel.appendChild(opt);
+    }
+    selWrap.classList.remove('hidden');
+  } else {
+    selWrap.classList.add('hidden');
+  }
+  state.positionIndex = 0;
+
+  // init overrides
+  state.overrides = {};
+  state.channelStatus = {};
+  for (const ch of state.channels) {
+    state.overrides[ch.commandId] = {
+      enabled:  true,
+      distance: ch.distance,
+      trim:     ch.trim,
+    };
+    state.channelStatus[ch.commandId] = 'pending';
+  }
+
+  renderChannelTable();
+  renderOverrideTable();
+  updateActionButtons();
+
+  log(`✓ Parsed ${state.channels.length} channels from ${state.adyFilename}`, 'success');
+}
+
+function onPositionChange() {
+  state.positionIndex = parseInt(document.getElementById('position-select').value, 10);
+  log(`Switched to measurement position ${state.positionIndex}`, 'info');
+}
+
+function isSubwoofer(commandId) {
+  return /^SW/i.test(commandId);
+}
+
+function renderChannelTable() {
+  const tbody = document.getElementById('channel-tbody');
+  tbody.innerHTML = '';
+
+  for (const ch of state.channels) {
+    const tr = document.createElement('tr');
+    if (isSubwoofer(ch.commandId)) tr.className = 'sub-row';
+
+    const posCount = ch.responseData.length;
+    const posLabel = posCount > 1 ? `MLP + ${posCount - 1}` : (posCount === 1 ? '1 (MLP)' : '—');
+
+    tr.innerHTML = `
+      <td><strong>${ch.commandId}</strong></td>
+      <td>${ch.distance != null ? ch.distance.toFixed(2) : '—'}</td>
+      <td>${ch.trim != null ? ch.trim.toFixed(1) : '—'}</td>
+      <td>${ch.delay != null ? ch.delay.toFixed(2) : '—'}</td>
+      <td>${ch.isReversePolarity ? '⚠️ Reversed' : '✅ Normal'}</td>
+      <td>${isSubwoofer(ch.commandId) ? '🔊 Subwoofer' : '🔈 Speaker'}</td>
+      <td>${posLabel}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById('channel-table-wrap').classList.remove('hidden');
+  document.getElementById('channel-count-label').textContent =
+    `${state.channels.length} channels detected`;
+}
+
+function renderOverrideTable() {
+  const tbody = document.getElementById('override-tbody');
+  tbody.innerHTML = '';
+
+  for (const ch of state.channels) {
+    const ov = state.overrides[ch.commandId];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="text-align:center">
+        <input type="checkbox" ${ov.enabled ? 'checked' : ''}
+               onchange="state.overrides['${ch.commandId}'].enabled = this.checked" />
+      </td>
+      <td><strong>${ch.commandId}</strong></td>
+      <td>
+        <input type="number" style="width:100px" step="0.01"
+               value="${ov.distance != null ? ov.distance : ''}"
+               placeholder="—"
+               oninput="state.overrides['${ch.commandId}'].distance = parseFloat(this.value)||null" />
+      </td>
+      <td>
+        <input type="number" style="width:90px" step="0.1"
+               value="${ov.trim != null ? ov.trim : ''}"
+               placeholder="—"
+               oninput="state.overrides['${ch.commandId}'].trim = parseFloat(this.value)||null" />
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById('override-placeholder').classList.add('hidden');
+  document.getElementById('override-table-wrap').classList.remove('hidden');
+}
+
+/* ============================================================
+   TARGET CURVE
+============================================================ */
+const FREQ_POINTS = (() => {
+  const pts = [];
+  // log-spaced from 20 to 20000
+  for (let i = 0; i <= 200; i++) {
+    pts.push(20 * Math.pow(1000, i / 200));
+  }
+  return pts;
+})();
+
+function houseSlope(freq, pivotHz, slopeDbOct) {
+  if (freq <= pivotHz) return 0;
+  return slopeDbOct * Math.log2(freq / pivotHz);
+}
+
+function buildTargetCurve() {
+  const preset     = document.getElementById('curve-preset').value;
+  const bassFreq   = parseFloat(document.getElementById('bass-freq').value)  || 60;
+  const bassGain   = parseFloat(document.getElementById('bass-gain').value)   || 0;
+  const trebleFreq = parseFloat(document.getElementById('treble-freq').value) || 8000;
+  const trebleGain = parseFloat(document.getElementById('treble-gain').value) || 0;
+
+  const curve = FREQ_POINTS.map(f => {
+    let db = 0;
+
+    if (preset === 'flat') {
+      db = 0;
+    } else if (preset === 'harman') {
+      // +6 dB shelf below 100 Hz, gentle -0.5 dB/oct tilt above 2kHz
+      if (f < 100)       db = 6;
+      else if (f < 200)  db = 6 * (1 - (Math.log2(f/100) / Math.log2(2)));
+      db += houseSlope(f, 2000, -0.5);
+    } else if (preset === 'house05') {
+      db = houseSlope(f, 1000, -0.5);
+    } else if (preset === 'house10') {
+      db = houseSlope(f, 1000, -1.0);
+    } else if (preset === 'xcurve') {
+      db = houseSlope(f, 2000, -3.0);
+    } else if (preset === 'csv') {
+      // interpolate from custom points
+      if (state.customCurvePoints.length >= 2) {
+        db = interpolateCurve(state.customCurvePoints, f);
+      }
+    }
+
+    // Bass shelf addition
+    if (bassGain !== 0) {
+      if (f <= bassFreq) {
+        db += bassGain;
+      } else {
+        // shelf roll-off over 1 octave
+        const rollOcts = Math.log2(f / bassFreq);
+        db += bassGain * Math.max(0, 1 - rollOcts);
+      }
+    }
+
+    // Treble shelf (rolloff from treble freq downward to negative)
+    if (trebleGain !== 0 && f >= trebleFreq) {
+      db += trebleGain; // trebleGain is already 0 to -3
+    }
+
+    return [f, db];
+  });
+
+  state.targetCurveCache = curve;
+  return curve;
+}
+
+function interpolateCurve(points, freq) {
+  const sorted = [...points].sort((a,b) => a[0]-b[0]);
+  if (freq <= sorted[0][0]) return sorted[0][1];
+  if (freq >= sorted[sorted.length-1][0]) return sorted[sorted.length-1][1];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const [f0, d0] = sorted[i];
+    const [f1, d1] = sorted[i+1];
+    if (freq >= f0 && freq <= f1) {
+      const t = (Math.log(freq) - Math.log(f0)) / (Math.log(f1) - Math.log(f0));
+      return d0 + t * (d1 - d0);
+    }
+  }
+  return 0;
+}
+
+function onPresetChange() {
+  const preset = document.getElementById('curve-preset').value;
+  document.getElementById('csv-upload-row').classList.toggle('hidden', preset !== 'csv');
+  updateCurvePreview();
+}
+
+function onCSVLoad(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const lines = ev.target.result.trim().split('\n');
+    const pts = [];
+    for (const line of lines) {
+      const [f, d] = line.split(',').map(s => parseFloat(s.trim()));
+      if (!isNaN(f) && !isNaN(d)) pts.push([f, d]);
+    }
+    if (pts.length < 2) {
+      log('Custom CSV: need at least 2 frequency,dB pairs', 'warn');
+      document.getElementById('csv-status').textContent = '⚠️ Need at least 2 rows';
+      return;
+    }
+    state.customCurvePoints = pts;
+    document.getElementById('csv-status').textContent = `✓ ${pts.length} points loaded`;
+    log(`Custom CSV loaded: ${pts.length} points`, 'success');
+    updateCurvePreview();
+  };
+  reader.readAsText(file);
+}
+
+function onSubAutoChange() {
+  const auto = document.getElementById('sub-xover-auto').checked;
+  document.getElementById('sub-xover').disabled = auto;
+}
+
+/* ============================================================
+   ASCII CURVE PREVIEW
+============================================================ */
+function updateCurvePreview() {
+  const curve = buildTargetCurve();
+  const preview = renderAsciiCurve(curve);
+  document.getElementById('curve-preview').textContent = preview;
+}
+
+function renderAsciiCurve(curve) {
+  const WIDTH  = 52;   // plot characters wide (freq axis)
+  const HEIGHT = 13;   // plot rows (dB axis)
+  const DB_MIN = -12;
+  const DB_MAX = +12;
+  const FREQ_MIN = 20;
+  const FREQ_MAX = 20000;
+
+  // Sample curve at WIDTH equally log-spaced freqs
+  const cols = [];
+  for (let i = 0; i < WIDTH; i++) {
+    const f = FREQ_MIN * Math.pow(FREQ_MAX / FREQ_MIN, i / (WIDTH - 1));
+    cols.push(interpolateCurve(curve.map(p => [p[0], p[1]]), f));
+  }
+
+  // Build grid HEIGHT×WIDTH
+  const grid = Array.from({length: HEIGHT}, () => Array(WIDTH).fill(' '));
+
+  for (let x = 0; x < WIDTH; x++) {
+    const db = Math.max(DB_MIN, Math.min(DB_MAX, cols[x]));
+    // map dB to row: DB_MAX → row 0, DB_MIN → row HEIGHT-1
+    const row = Math.round(((DB_MAX - db) / (DB_MAX - DB_MIN)) * (HEIGHT - 1));
+    grid[row][x] = '●';
+    // fill downward to 0 dB line so it looks like a solid curve
+    const zeroRow = Math.round((DB_MAX / (DB_MAX - DB_MIN)) * (HEIGHT - 1));
+    if (db > 0) {
+      for (let r = row + 1; r <= zeroRow; r++) grid[r][x] = '│';
+    } else if (db < 0) {
+      for (let r = zeroRow; r < row; r++) grid[r][x] = '│';
+    }
+  }
+
+  const lines = [];
+  const presetName = document.getElementById('curve-preset').options[
+    document.getElementById('curve-preset').selectedIndex
+  ].text;
+
+  lines.push(` Target: ${presetName}`);
+  lines.push(` dB`);
+  for (let r = 0; r < HEIGHT; r++) {
+    const dbLabel = DB_MAX - r * (DB_MAX - DB_MIN) / (HEIGHT - 1);
+    const lbl = dbLabel === 0 ? ' 0' :
+                dbLabel > 0 ? `+${Math.round(dbLabel)}` : `${Math.round(dbLabel)}`;
+    lines.push(`${lbl.padStart(3)}│${grid[r].join('')}│`);
+  }
+  lines.push(`   └${'─'.repeat(WIDTH)}┘`);
+  lines.push(`    20Hz${' '.repeat(Math.floor((WIDTH-14)/2))}1kHz${' '.repeat(Math.ceil((WIDTH-14)/2))}20kHz`);
+  return lines.join('\n');
+}
+
+/* ============================================================
+   IMPORT TO REW
+============================================================ */
+async function importToREW() {
+  if (!state.adyRaw) { log('Load an ADY file first', 'warn'); return; }
+  if (!state.connected) { log('Not connected to REW', 'warn'); return; }
+
+  document.getElementById('btn-import').disabled = true;
+  log('Starting REW import…', 'info');
+
+  try {
+    // Enable blocking mode and inhibit graph updates
+    await rewAPI('POST', '/application/blocking', { blocking: true });
+    await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: true });
+
+    const total = state.channels.length;
+    let done = 0;
+
+    // Fetch equaliser list once
+    let availableEqs = [];
+    try {
+      const eqData = await rewAPI('GET', '/eq/equalisers');
+      availableEqs = Array.isArray(eqData) ? eqData :
+                     (Array.isArray(eqData?.equalisers) ? eqData.equalisers :
+                     (Array.isArray(eqData?.names) ? eqData.names : []));
+      log(`Available equalisers: ${availableEqs.join(', ')}`, 'info');
+    } catch (_) {
+      log('Could not fetch equaliser list — will attempt MultEQ-X anyway', 'warn');
+    }
+
+    const multEqName = availableEqs.find(n => /multieq/i.test(n)) || 'Generic';
+    if (!/multieq/i.test(multEqName)) {
+      log(`MultEQ-X not found — falling back to "${multEqName}"`, 'warn');
+    }
+
+    for (const ch of state.channels) {
+      const ov = state.overrides[ch.commandId];
+      if (!ov.enabled) {
+        log(`Skipping ${ch.commandId} (disabled in overrides)`, 'warn');
+        continue;
+      }
+
+      log(`Importing ${ch.commandId}…`, 'info');
+
+      // Get IR data for selected position
+      const posIdx = Math.min(state.positionIndex, ch.responseData.length - 1);
+      const irEntry = ch.responseData[posIdx] || ch.responseData[0];
+
+      if (!irEntry) {
+        log(`⚠ No response data for ${ch.commandId} — skipping`, 'warn');
+        continue;
+      }
+
+      const irData      = irEntry.data || irEntry.responseData || '';
+      const sampleRate  = irEntry.sampleRate || irEntry.fs || 48000;
+      const sampleInterval = 1 / sampleRate;
+
+      try {
+        const importRes = await rewAPI('POST', '/import/impulse-response-data', {
+          title:          ch.commandId,
+          data:           irData,
+          startTime:      0,
+          sampleInterval: sampleInterval,
+        });
+
+        const uuid = importRes?.uuid || importRes?.id || importRes?.measurement?.uuid;
+        if (!uuid) {
+          log(`⚠ No UUID returned for ${ch.commandId} — skipping EQ step`, 'warn');
+          continue;
+        }
+
+        state.channelUUIDs[ch.commandId] = uuid;
+        state.channelStatus[ch.commandId] = 'imported';
+        done++;
+        log(`✓ ${ch.commandId} imported — UUID: ${uuid} (${done}/${total})`, 'success');
+
+        // Set equaliser profile
+        try {
+          await rewAPI('POST', `/measurements/${uuid}/equaliser`, { name: multEqName });
+          log(`Set "${multEqName}" equaliser on ${ch.commandId} ✓`, 'success');
+        } catch (_) {
+          log(`Could not set equaliser on ${ch.commandId}`, 'warn');
+        }
+
+      } catch (e) {
+        log(`✗ Import failed for ${ch.commandId}: ${e.message}`, 'error');
+      }
+    }
+
+    await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: false });
+
+    state.importedCount = Object.keys(state.channelUUIDs).length;
+    log(`Import complete: ${state.importedCount}/${total} channels`, 'success');
+    updateActionButtons();
+
+  } catch (e) {
+    log(`Import aborted: ${e.message}`, 'error');
+    try { await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: false }); } catch (_) {}
+  }
+
+  document.getElementById('btn-import').disabled = false;
+}
+
+/* ============================================================
+   EQ MATCHING
+============================================================ */
+async function runEQMatching() {
+  if (!Object.keys(state.channelUUIDs).length) {
+    log('No imported channels — run Import first', 'warn');
+    return;
+  }
+
+  document.getElementById('btn-eq').disabled = true;
+  log('Starting EQ matching…', 'info');
+
+  // Apply target curve settings to each measurement, then run EQ
+  for (const ch of state.channels) {
+    const uuid = state.channelUUIDs[ch.commandId];
+    if (!uuid) continue;
+    const ov = state.overrides[ch.commandId];
+    if (!ov.enabled) continue;
+
+    log(`Processing EQ for ${ch.commandId}…`, 'info');
+
+    try {
+      // Apply target settings — using "Flat" so REW uses the flat target;
+      // our house curve is captured in the preset and applied via the filter mapping.
+      await rewAPI('POST', `/measurements/${uuid}/target-settings`, {
+        type: 'Flat',
+        addRoomCurve: false,
+      }).catch(() => log(`target-settings not applied for ${ch.commandId} — continuing`, 'warn'));
+
+      // Calculate target level
+      await rewAPI('POST', `/measurements/${uuid}/eq/command`,
+        { command: 'Calculate target level' });
+
+      // Match target
+      await rewAPI('POST', `/measurements/${uuid}/eq/command`,
+        { command: 'Match target' });
+
+      // Retrieve filters
+      const filters = await rewAPI('GET', `/measurements/${uuid}/filters`);
+      const filterArray = Array.isArray(filters) ? filters :
+                         (Array.isArray(filters?.filters) ? filters.filters : []);
+
+      state.generatedFilters[ch.commandId] = filterArray;
+      state.channelStatus[ch.commandId] = 'eq-ready';
+
+      log(`✓ EQ for ${ch.commandId}: ${filterArray.length} filters generated`, 'success');
+
+    } catch (e) {
+      log(`✗ EQ failed for ${ch.commandId}: ${e.message}`, 'error');
+    }
+  }
+
+  renderFilterResults();
+  updateActionButtons();
+  document.getElementById('btn-eq').disabled = false;
+  log('EQ matching complete', 'success');
+}
+
+/* ============================================================
+   FILTER MAPPING (REW → ADY)
+============================================================ */
+const REW_TO_ADY_TYPE = {
+  'PEQ':     'PEQ',
+  'LS':      'lowShelf',
+  'HS':      'highShelf',
+  'LP':      'lowPass',
+  'HP':      'highPass',
+  'PEAK':    'PEQ',
+  'Peaking': 'PEQ',
+};
+
+const X3800H_MAX_FILTERS = 20;
+const X3800H_MAX_GAIN    = 12;
+const X3800H_MAX_Q       = 10;
+const X3800H_MIN_Q       = 0.1;
+const X3800H_MIN_FREQ    = 20;
+const X3800H_MAX_FREQ    = 20000;
+
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+function mapFiltersForADY(commandId) {
+  const raw = state.generatedFilters[commandId] || [];
+  const mapped = [];
+
+  for (const f of raw) {
+    const gain  = clamp(f.gain  || 0, -X3800H_MAX_GAIN, X3800H_MAX_GAIN);
+    const freq  = clamp(f.frequency || f.freq || 1000, X3800H_MIN_FREQ, X3800H_MAX_FREQ);
+    const q     = clamp(f.q || f.Q || 1.0, X3800H_MIN_Q, X3800H_MAX_Q);
+    const type  = REW_TO_ADY_TYPE[f.type] || 'PEQ';
+
+    if (gain !== (f.gain||0))  log(`  Clamped gain on ${commandId} filter ${freq}Hz: ${f.gain}→${gain}dB`, 'warn');
+    if (freq !== (f.frequency||f.freq||1000)) log(`  Clamped freq on ${commandId}: ${f.frequency}→${freq}Hz`, 'warn');
+    if (q    !== (f.q||f.Q||1.0)) log(`  Clamped Q on ${commandId}: ${f.q}→${q}`, 'warn');
+
+    mapped.push({ type, frequency: freq, gain, q });
+  }
+
+  if (mapped.length > X3800H_MAX_FILTERS) {
+    log(`⚠ ${commandId}: ${mapped.length} filters truncated to ${X3800H_MAX_FILTERS}`, 'warn');
+    return mapped.slice(0, X3800H_MAX_FILTERS);
+  }
+
+  return mapped;
+}
+
+/* ============================================================
+   EXPORT ADY
+============================================================ */
+async function exportADY() {
+  if (!state.adyRaw) { log('No ADY loaded', 'warn'); return; }
+  if (!Object.keys(state.generatedFilters).length) {
+    log('No filters generated — run EQ Matching first', 'warn');
+    return;
+  }
+
+  log('Building tuned ADY…', 'info');
+
+  // Deep clone
+  const output = JSON.parse(JSON.stringify(state.adyRaw));
+
+  for (const ch of output.detectedChannels) {
+    const id = ch.commandId;
+    if (state.generatedFilters[id]) {
+      ch.peqFilters = mapFiltersForADY(id);
+      state.channelStatus[id] = 'exported';
+      log(`Injected ${ch.peqFilters.length} filters into ${id}`, 'info');
+    } else {
+      log(`No filters for ${id} — leaving unchanged`, 'warn');
+    }
+  }
+
+  const json = JSON.stringify(output, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  const baseName = state.adyFilename.replace(/\.ady$/i, '').replace(/\.json$/i, '');
+  a.download = `${baseName}-tuned.ady`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  log(`✅ Export complete — load "${a.download}" in Denon MultEQ Editor and send to X3800H`, 'success');
+
+  // Optional cleanup
+  if (document.getElementById('cleanup-rew').checked) {
+    try {
+      await rewAPI('DELETE', '/measurements');
+      log('REW measurements cleared', 'info');
+    } catch (e) {
+      log(`Could not clear REW measurements: ${e.message}`, 'warn');
+    }
+  }
+
+  renderFilterResults(); // refresh status badges
+}
+
+/* ============================================================
+   FILTER RESULTS RENDER
+============================================================ */
+function renderFilterResults() {
+  const content = document.getElementById('filters-content');
+  const placeholder = document.getElementById('filters-placeholder');
+  const container = document.getElementById('filter-channels');
+
+  const channelsWithFilters = Object.keys(state.generatedFilters);
+  if (channelsWithFilters.length === 0) return;
+
+  placeholder.classList.add('hidden');
+  content.classList.remove('hidden');
+  container.innerHTML = '';
+
+  let totalFilters = 0;
+  for (const id of channelsWithFilters) {
+    totalFilters += (state.generatedFilters[id] || []).length;
+  }
+  document.getElementById('filters-summary').textContent =
+    `${channelsWithFilters.length} channels · ${totalFilters} total filters`;
+
+  for (const id of channelsWithFilters) {
+    const filters = state.generatedFilters[id] || [];
+    const status  = state.channelStatus[id] || 'pending';
+    const badgeClass = `badge-${status.replace(/-/g,'').replace('eqready','eq-ready')}`;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'channel-result';
+    wrap.innerHTML = `
+      <div class="channel-result-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>${id} — ${filters.length} filters</span>
+        <span class="badge ${badgeClass}">
+          <span class="dot"></span>${status.replace(/-/g,' ')}
+        </span>
+      </div>
+      <div class="channel-result-body">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Type</th><th>Frequency (Hz)</th><th>Gain (dB)</th><th>Q</th>
+            </tr></thead>
+            <tbody>
+              ${filters.map((f,i) => `<tr>
+                <td>${i+1}</td>
+                <td>${f.type||'PEQ'}</td>
+                <td>${(f.frequency||f.freq||0).toFixed(1)}</td>
+                <td>${(f.gain||0).toFixed(2)}</td>
+                <td>${(f.q||f.Q||1).toFixed(3)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    container.appendChild(wrap);
+  }
+
+  document.getElementById('panel-filters').classList.add('open');
+}
+
+function copyFiltersJSON() {
+  const json = JSON.stringify(state.generatedFilters, null, 2);
+  navigator.clipboard.writeText(json).then(
+    () => log('Filters copied to clipboard ✓', 'success'),
+    () => log('Clipboard copy failed — check browser permissions', 'warn')
+  );
+}
+
+/* ============================================================
+   BUTTON STATE
+============================================================ */
+function updateActionButtons() {
+  const hasADY      = !!state.adyRaw;
+  const isConnected = state.connected;
+  const hasUUIDs    = Object.keys(state.channelUUIDs).length > 0;
+  const hasFilters  = Object.keys(state.generatedFilters).length > 0;
+
+  document.getElementById('btn-import').disabled  = !(hasADY && isConnected);
+  document.getElementById('btn-eq').disabled       = !hasUUIDs;
+  document.getElementById('btn-export').disabled   = !hasFilters;
+}
+
+/* ============================================================
+   INIT
+============================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  // Restore saved port
+  const savedPort = localStorage.getItem('rew_port');
+  if (savedPort) {
+    document.getElementById('rew-port').value = savedPort;
+    testConnection();
+  }
+
+  // Initial curve preview
+  updateCurvePreview();
+
+  // Open target panel for visibility
+  document.getElementById('panel-target').classList.add('open');
+
+  log('Audyssey REW Tuner loaded. Load an ADY file and connect to REW to begin.', 'info');
+});
+</script>
+</body>
+</html>
