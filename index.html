@@ -1209,16 +1209,8 @@ async function importToREW() {
   log('Starting REW import…', 'info');
 
   try {
-    // Enable blocking mode and inhibit graph updates
-    // Correct paths: /application/blocking, /application/inhibit-graph-updates (NOT /application/commands/...)
-    const appPath = '/application';
-    
-    try {
-      await rewAPI('POST', appPath + '/blocking', { blocking: true });
-    } catch (e) { /* ignore */ }
-    try {
-      await rewAPI('POST', appPath + '/inhibit-graph-updates', { inhibit: true });
-    } catch (e) { /* ignore */ }
+    // Blocking/inhibit commands removed for REW 5.40 Beta compatibility
+    // Import will work but REW UI may be less responsive during import
 
     const total = state.channels.length;
     let done = 0;
@@ -1294,18 +1286,13 @@ async function importToREW() {
       }
     }
 
-    // Disable inhibit graph updates (correct path: /application/inhibit-graph-updates)
-    try {
-      await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: false });
-    } catch (e) { /* ignore */ }
-
+    // Skip inhibit restore for REW 5.40 Beta (feature not available)
     state.importedCount = Object.keys(state.channelUUIDs).length;
     log(`Import complete: ${state.importedCount}/${total} channels`, 'success');
     updateActionButtons();
 
   } catch (e) {
     log(`Import aborted: ${e.message}`, 'error');
-    try { await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: false }); } catch (_) {}
   }
 
   document.getElementById('btn-import').disabled = false;
