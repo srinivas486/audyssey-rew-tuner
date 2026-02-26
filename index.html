@@ -1210,20 +1210,15 @@ async function importToREW() {
 
   try {
     // Enable blocking mode and inhibit graph updates
-    // Try /application/commands first, fallback to /commands for REW 5.40 Beta 118+
-    const cmdPath = '/application/commands';
-    const cmdPathFallback = '/commands';
+    // Correct paths: /application/blocking, /application/inhibit-graph-updates (NOT /application/commands/...)
+    const appPath = '/application';
     
     try {
-      await rewAPI('POST', cmdPath + '/blocking', { blocking: true });
-    } catch (e) {
-      await rewAPI('POST', cmdPathFallback + '/blocking', { blocking: true });
-    }
+      await rewAPI('POST', appPath + '/blocking', { blocking: true });
+    } catch (e) { /* ignore */ }
     try {
-      await rewAPI('POST', cmdPath + '/inhibit-graph-updates', { inhibit: true });
-    } catch (e) {
-      await rewAPI('POST', cmdPathFallback + '/inhibit-graph-updates', { inhibit: true });
-    }
+      await rewAPI('POST', appPath + '/inhibit-graph-updates', { inhibit: true });
+    } catch (e) { /* ignore */ }
 
     const total = state.channels.length;
     let done = 0;
@@ -1299,12 +1294,10 @@ async function importToREW() {
       }
     }
 
-    // Try main path first, fallback for REW 5.40 Beta 118+
+    // Disable inhibit graph updates (correct path: /application/inhibit-graph-updates)
     try {
-      await rewAPI('POST', '/application/commands/inhibit-graph-updates', { inhibit: false });
-    } catch (e) {
-      try { await rewAPI('POST', '/commands/inhibit-graph-updates', { inhibit: false }); } catch (_) {}
-    }
+      await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: false });
+    } catch (e) { /* ignore */ }
 
     state.importedCount = Object.keys(state.channelUUIDs).length;
     log(`Import complete: ${state.importedCount}/${total} channels`, 'success');
@@ -1312,8 +1305,7 @@ async function importToREW() {
 
   } catch (e) {
     log(`Import aborted: ${e.message}`, 'error');
-    try { await rewAPI('POST', '/application/commands/inhibit-graph-updates', { inhibit: false }); } catch (_) {}
-    try { await rewAPI('POST', '/commands/inhibit-graph-updates', { inhibit: false }); } catch (_) {}
+    try { await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: false }); } catch (_) {}
   }
 
   document.getElementById('btn-import').disabled = false;
