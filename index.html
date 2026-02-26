@@ -828,7 +828,7 @@ async function testConnection() {
   msgEl.textContent = '';
 
   try {
-    const data = await rewAPI('GET', '/application');
+    const data = await rewAPI('GET', '/version/commands');
     state.connected = true;
     state.rewVersion = data?.version || data?.title || 'REW';
     statusEl.className = 'badge badge-connected';
@@ -1203,8 +1203,8 @@ async function importToREW() {
 
   try {
     // Enable blocking mode and inhibit graph updates
-    await rewAPI('POST', '/application/blocking', { blocking: true });
-    await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: true });
+    await rewAPI('POST', '/version/commands/blocking', { blocking: true });
+    await rewAPI('POST', '/version/commands/inhibit-graph-updates', { inhibit: true });
 
     const total = state.channels.length;
     let done = 0;
@@ -1280,7 +1280,7 @@ async function importToREW() {
       }
     }
 
-    await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: false });
+    await rewAPI('POST', '/version/commands/inhibit-graph-updates', { inhibit: false });
 
     state.importedCount = Object.keys(state.channelUUIDs).length;
     log(`Import complete: ${state.importedCount}/${total} channels`, 'success');
@@ -1288,7 +1288,7 @@ async function importToREW() {
 
   } catch (e) {
     log(`Import aborted: ${e.message}`, 'error');
-    try { await rewAPI('POST', '/application/inhibit-graph-updates', { inhibit: false }); } catch (_) {}
+    try { await rewAPI('POST', '/version/commands/inhibit-graph-updates', { inhibit: false }); } catch (_) {}
   }
 
   document.getElementById('btn-import').disabled = false;
