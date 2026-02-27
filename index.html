@@ -1264,7 +1264,11 @@ async function importToREW() {
           applyCal:       false,
         });
 
-        const uuid = importRes?.uuid || importRes?.id || importRes?.measurement?.uuid;
+        // Debug: log full response to see what REW returns
+        console.log('Import response for', ch.commandId, ':', importRes);
+        log(`DEBUG: importRes = ${JSON.stringify(importRes).substring(0, 200)}`, 'info');
+
+        const uuid = importRes?.uuid || importRes?.id || importRes?.measurement?.uuid || importRes?.[0]?.uuid || importRes?.[0]?.id;
         if (!uuid) {
           log(`⚠ No UUID returned for ${ch.commandId} — skipping EQ step`, 'warn');
           continue;
