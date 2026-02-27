@@ -1256,11 +1256,12 @@ async function importToREW() {
 
       try {
         const importRes = await rewAPI('POST', '/import/impulse-response-data', {
-          title:          ch.commandId,
           identifier:     ch.commandId,  // Required by REW 5.40+
           data:           irData,
           startTime:      0,
-          sampleInterval: sampleInterval,
+          sampleRate:     sampleRate,
+          splOffset:      0,
+          applyCal:       false,
         });
 
         const uuid = importRes?.uuid || importRes?.id || importRes?.measurement?.uuid;
