@@ -1431,22 +1431,60 @@ async function importToREW() {
     log('Fetching measurement list from REW...', 'info');
     try {
       const measurements = await rewAPI('GET', '/measurements');
-      const measList = Array.isArray(measurements) ? measurements : 
-                       (measurements?.measurements || []);
+      
+      // Debug: log the raw response
+      console.log('Measurements response:', measurements);
+      log(`DEBUG: measurements response = ${JSON.stringify(measurements).substring(0, 500)}`, 'info');
+      
+      // REW API may return measurements in different formats
+      let measList = [];
+      if (Array.isArray(measurements)) {
+        measList = measurements;
+      } else if (measurements?.measurements) {
+        measList = measurements.measurements;
+      } else if (measurements?.items) {
+        measList = measurements.items;
+      } else if (measurements) {
+        // If it's a single object, check if it has numeric keys (array-like)
+        const keys = Object.keys(measurements).filter(k => !isNaN(Number(k)));
+        if (keys.length > 0) {
+          measList = keys.map(k => measurements[k]);
+        }
+      }
       
       log(`Found ${measList.length} measurements in REW`, 'info');
+      log(`Measurement names: ${measList.map(m => m?.name || m?.id || m).join(', ')}`, 'info');
       
       // Match imported channels by name to get their actual indices
+      let matchedCount = 0;
       for (const ch of state.channels) {
         if (!state.overrides[ch.commandId]?.enabled) continue;
         
-        // Find measurement by name (identifier)
-        const meas = measList.find(m => m.name === ch.commandId || m.name === ch.commandId.replace('SLA', 'SL').replace('SRA', 'SR'));
+        // Find measurement by name (identifier) - try various property names
+        const meas = measList.find(m => {
+          const name = m?.name || m?.id || m?.identifier || m;
+          return name === ch.commandId || 
+                 name === ch.commandId.replace('SLA', 'SL').replace('SRA', 'SR') ||
+                 name === ch.commandId.replace('SLA', 'Surround L').replace('SRA', 'Surround R');
+        });
         if (meas) {
-          state.channelUUIDs[ch.commandId] = meas.id || meas.index || meas.uuid;
+          state.channelUUIDs[ch.commandId] = meas.id || meas.index || meas.uuid || meas;
           log(`Matched ${ch.commandId} to measurement index: ${state.channelUUIDs[ch.commandId]}`, 'success');
+          matchedCount++;
         } else {
           log(`Could not find measurement for ${ch.commandId}`, 'warn');
+        }
+      }
+      
+      // Fallback: if no measurements matched by name, assume sequential indices 0,1,2,...
+      if (matchedCount === 0 && measList.length > 0) {
+        log(`No measurements matched by name - using sequential indices`, 'warn');
+        const channelIds = state.channels.filter(ch => state.overrides[ch.commandId]?.enabled).map(ch => ch.commandId);
+        for (let i = 0; i < Math.min(channelIds.length, measList.length); i++) {
+          const chId = channelIds[i];
+          const meas = measList[i];
+          state.channelUUIDs[chId] = meas?.id || meas?.index || meas?.uuid || i;
+          log(`Assigned ${chId} to index ${state.channelUUIDs[chId]}`, 'info');
         }
       }
       
