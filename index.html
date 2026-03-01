@@ -1304,17 +1304,25 @@ async function importToREW() {
     let availableEqs = [];
     try {
       const eqData = await rewAPI('GET', '/eq/equalisers');
+      // REW may return array of objects with 'name' property or array of strings
       availableEqs = Array.isArray(eqData) ? eqData :
                      (Array.isArray(eqData?.equalisers) ? eqData.equalisers :
                      (Array.isArray(eqData?.names) ? eqData.names : []));
-      log(`Available equalisers: ${availableEqs.join(', ')}`, 'info');
+      // Extract names if objects
+      const eqNames = availableEqs.map(eq => (typeof eq === 'object' && eq?.name) ? eq.name : eq);
+      log(`Available equalisers: ${eqNames.slice(0, 10).join(', ')}${eqNames.length > 10 ? '...' : ''}`, 'info');
     } catch (_) {
       log('Could not fetch equaliser list — will attempt MultEQ-X anyway', 'warn');
     }
 
-    const multEqName = availableEqs.find(n => /multieq/i.test(n)) || 'Generic';
+    // Find MultEQ-X or similar, fall back to first available or Generic
+    const multEqName = availableEqs.find(n => {
+      const name = (typeof n === 'object' && n?.name) ? n.name : n;
+      return /multieq/i.test(name);
+    })?.name || availableEqs.find(n => /multieq/i.test(typeof n === 'object' ? n.name : n))?.name || 'Generic';
+    
     if (!/multieq/i.test(multEqName)) {
-      log(`MultEQ-X not found — falling back to "${multEqName}"`, 'warn');
+      log(`Using equaliser: "${multEqName}"`, 'info');
     }
 
     for (const ch of state.channels) {
@@ -1368,7 +1376,18 @@ async function importToREW() {
         console.log('Import response for', ch.commandId, ':', importRes);
         log(`DEBUG: importRes = ${JSON.stringify(importRes).substring(0, 200)}`, 'info');
 
-        const uuid = importRes?.uuid || importRes?.id || importRes?.measurement?.uuid || importRes?.[0]?.uuid || importRes?.[0]?.id;
+        // Extract UUID - REW returns different formats:
+        // - UUID string: {uuid: "..."}
+        // - Numeric ID in message: {"message": "Import impulse response data FL ID 1 completed"}
+        let uuid = importRes?.uuid || importRes?.id || importRes?.measurement?.uuid || importRes?.[0]?.uuid || importRes?.[0]?.id;
+        
+        // If no UUID found, try to extract numeric ID from message like "ID 1 completed"
+        if (!uuid && importRes?.message) {
+          const idMatch = importRes.message.match(/\bID\s+(\d+)\b/i);
+          if (idMatch) {
+            uuid = idMatch[1];
+          }
+        }
         if (!uuid) {
           log(`⚠ No UUID returned for ${ch.commandId} — skipping EQ step`, 'warn');
           continue;
