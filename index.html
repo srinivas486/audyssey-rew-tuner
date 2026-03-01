@@ -924,6 +924,16 @@ function parseADY(json) {
     _raw:             ch,
   }));
 
+  // Handle responseData - could be array or object with numeric keys like {0: [...], 1: [...]}
+  for (const ch of state.channels) {
+    const rd = ch.responseData;
+    if (rd && typeof rd === 'object' && !Array.isArray(rd)) {
+      // Convert object with numeric keys to sorted array
+      const keys = Object.keys(rd).map(Number).sort((a, b) => a - b);
+      ch.responseData = keys.map(k => rd[k]);
+    }
+  }
+
   // detect max positions across all channels
   const maxPos = Math.max(...state.channels.map(c => c.responseData.length), 1);
 
