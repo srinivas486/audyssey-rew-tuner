@@ -68,6 +68,18 @@
       color: var(--muted);
       margin-top: 0.25rem;
     }
+    .author {
+      color: var(--accent-pink, #cd248b);
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+
+    #app-header p {
+      font-size: 0.8125rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
 
     /* ============================================================
        COLLAPSIBLE PANELS
@@ -374,6 +386,7 @@
   <div id="app-header">
     <h1>Audyssey REW Tuner</h1>
     <p>Denon X3800H · MultEQ-X · REW API</p>
+    <p class="author">by Vasu</p>
   </div>
 
   <!-- ======================================================
@@ -475,7 +488,7 @@
             <label for="curve-preset">Preset</label>
             <select id="curve-preset" onchange="onPresetChange()">
               <option value="flat">Flat (Reference)</option>
-              <option value="harman" selected>Harman Home</option>
+              <option value="harman">Harman Home</option>
               <option value="house05">House Curve (−0.5 dB/oct)</option>
               <option value="house10">House Curve (−1.0 dB/oct)</option>
               <option value="laidback">Laidback (1.3 slope)</option>
@@ -910,6 +923,16 @@ function parseADY(json) {
     peqFilters:       ch.peqFilters   || [],
     _raw:             ch,
   }));
+
+  // Handle responseData - could be array or object with numeric keys like {0: [...], 1: [...]}
+  for (const ch of state.channels) {
+    const rd = ch.responseData;
+    if (rd && typeof rd === 'object' && !Array.isArray(rd)) {
+      // Convert object with numeric keys to sorted array
+      const keys = Object.keys(rd).map(Number).sort((a, b) => a - b);
+      ch.responseData = keys.map(k => rd[k]);
+    }
+  }
 
   // detect max positions across all channels
   const maxPos = Math.max(...state.channels.map(c => c.responseData.length), 1);
@@ -1388,6 +1411,7 @@ async function importToREW() {
             uuid = idMatch[1];
           }
         }
+        
         if (!uuid) {
           log(`⚠ No UUID returned for ${ch.commandId} — skipping EQ step`, 'warn');
           continue;
@@ -1396,19 +1420,89 @@ async function importToREW() {
         state.channelUUIDs[ch.commandId] = uuid;
         state.channelStatus[ch.commandId] = 'imported';
         done++;
-        log(`✓ ${ch.commandId} imported — UUID: ${uuid} (${done}/${total})`, 'success');
-
-        // Set equaliser profile
-        try {
-          await rewAPI('POST', `/measurements/${uuid}/equaliser`, { name: multEqName });
-          log(`Set "${multEqName}" equaliser on ${ch.commandId} ✓`, 'success');
-        } catch (_) {
-          log(`Could not set equaliser on ${ch.commandId}`, 'warn');
-        }
+        log(`✓ ${ch.commandId} imported (ID: ${uuid}) (${done}/${total})`, 'success');
 
       } catch (e) {
         log(`✗ Import failed for ${ch.commandId}: ${e.message}`, 'error');
       }
+    }
+
+    // After all imports, fetch the actual measurement list from REW to get correct indices
+    log('Fetching measurement list from REW...', 'info');
+    try {
+      const measurements = await rewAPI('GET', '/measurements');
+      
+      // Debug: log the raw response
+      console.log('Measurements response:', measurements);
+      log(`DEBUG: measurements response = ${JSON.stringify(measurements).substring(0, 500)}`, 'info');
+      
+      // REW API may return measurements in different formats
+      let measList = [];
+      if (Array.isArray(measurements)) {
+        measList = measurements;
+      } else if (measurements?.measurements) {
+        measList = measurements.measurements;
+      } else if (measurements?.items) {
+        measList = measurements.items;
+      } else if (measurements) {
+        // If it's a single object, check if it has numeric keys (array-like)
+        const keys = Object.keys(measurements).filter(k => !isNaN(Number(k)));
+        if (keys.length > 0) {
+          measList = keys.map(k => measurements[k]);
+        }
+      }
+      
+      log(`Found ${measList.length} measurements in REW`, 'info');
+      log(`Measurement names: ${measList.map(m => m?.name || m?.id || m).join(', ')}`, 'info');
+      
+      // Match imported channels by name to get their actual indices
+      let matchedCount = 0;
+      for (const ch of state.channels) {
+        if (!state.overrides[ch.commandId]?.enabled) continue;
+        
+        // Find measurement by name (identifier) - try various property names
+        const meas = measList.find(m => {
+          const name = m?.name || m?.id || m?.identifier || m;
+          return name === ch.commandId || 
+                 name === ch.commandId.replace('SLA', 'SL').replace('SRA', 'SR') ||
+                 name === ch.commandId.replace('SLA', 'Surround L').replace('SRA', 'Surround R');
+        });
+        if (meas) {
+          state.channelUUIDs[ch.commandId] = meas.id || meas.index || meas.uuid || meas;
+          log(`Matched ${ch.commandId} to measurement index: ${state.channelUUIDs[ch.commandId]}`, 'success');
+          matchedCount++;
+        } else {
+          log(`Could not find measurement for ${ch.commandId}`, 'warn');
+        }
+      }
+      
+      // Fallback: if no measurements matched by name, assume sequential indices 0,1,2,...
+      if (matchedCount === 0 && measList.length > 0) {
+        log(`No measurements matched by name - using sequential indices`, 'warn');
+        const channelIds = state.channels.filter(ch => state.overrides[ch.commandId]?.enabled).map(ch => ch.commandId);
+        for (let i = 0; i < Math.min(channelIds.length, measList.length); i++) {
+          const chId = channelIds[i];
+          const meas = measList[i];
+          state.channelUUIDs[chId] = meas?.id || meas?.index || meas?.uuid || i;
+          log(`Assigned ${chId} to index ${state.channelUUIDs[chId]}`, 'info');
+        }
+      }
+      
+      // Now set equaliser for all channels
+      for (const ch of state.channels) {
+        const uuid = state.channelUUIDs[ch.commandId];
+        if (!uuid) continue;
+        
+        try {
+          await rewAPI('POST', `/measurements/${uuid}/equaliser`, { name: multEqName });
+          log(`Set "${multEqName}" equaliser on ${ch.commandId} ✓`, 'success');
+        } catch (e) {
+          log(`Could not set equaliser on ${ch.commandId}: ${e.message}`, 'warn');
+        }
+      }
+      
+    } catch (e) {
+      log(`Could not fetch measurements: ${e.message}`, 'warn');
     }
 
     // Skip inhibit restore for REW 5.40 Beta (feature not available)
