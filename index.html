@@ -11,10 +11,10 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0d1117;
-      --surface:   #161b22;
+      --bg:        #000000;
+      --surface:   #0a0a0a;
       --surface2:  #1f2937;
-      --border:    #21262d;
+      --border:    #1a1a1a;
       --accent:    #0ea5e9;
       --accent2:   #2563eb;
       --text:      #f9fafb;
@@ -731,6 +731,23 @@
               onclick="clearConsole()">Clear</button>
     </div>
     <div id="console-output"></div>
+  </div>
+
+  <!-- Session Notes Panel -->
+  <div class="panel" id="panel-notes">
+    <div class="panel-header" onclick="togglePanel('panel-notes')">
+      <span class="panel-title">📝 Session Notes</span>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-content">
+        <textarea id="session-notes" placeholder="Add notes for this tuning session..." style="width:100%;min-height:80px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:0.5rem;font-family:inherit;font-size:0.85rem;resize:vertical;" oninput="saveNotes()"></textarea>
+        <div class="flex mt-1" style="justify-content:space-between">
+          <button class="btn btn-ghost" style="font-size:0.75rem" onclick="document.getElementById('session-notes').value='';saveNotes()">Clear</button>
+          <span class="text-dim" style="font-size:0.7rem">Auto-saved to localStorage</span>
+        </div>
+      </div>
+    </div>
   </div>
 
 </div><!-- /#app -->
@@ -1744,6 +1761,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   log('Audyssey REW Tuner loaded. Load an ADY file and connect to REW to begin.', 'info');
 });
+
+/* ============================================================
+   SESSION NOTES
+============================================================ */
+function saveNotes() {
+  localStorage.setItem('audyssey_notes', document.getElementById('session-notes').value);
+}
+function loadNotes() {
+  const saved = localStorage.getItem('audyssey_notes');
+  if (saved) document.getElementById('session-notes').value = saved;
+}
+document.addEventListener('DOMContentLoaded', loadNotes);
 </script>
 </body>
 </html>
