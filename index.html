@@ -755,6 +755,8 @@ const state = {
   customCurvePoints: [], // [[freq, dB], ...] from CSV
   targetCurveCache: [],  // computed target curve [[freq, dB]]
 
+  eqPayload: null,       // cached equalizer type for REW 5.40
+
   generatedFilters: {},  // commandId → FilterSetting[]
   channelStatus: {},     // commandId → 'pending'|'imported'|'eq-ready'|'exported'
 
@@ -1339,19 +1341,38 @@ async function importToREW() {
     }
 
     // Find MultEQ-X or similar, fall back to first available or Generic
-    const multEqName = availableEqs.find(n => {
-      const name = (typeof n === 'object' && n?.name) ? n.name : n;
+    let targetEq = availableEqs.find(n => {
+      const name = (typeof n === 'object') ? (n.name || n.model || '') : n;
       return /multieq/i.test(name);
-    })?.name || availableEqs.find(n => /multieq/i.test(typeof n === 'object' ? n.name : n))?.name || 'Generic';
+    });
     
-    if (!/multieq/i.test(multEqName)) {
-      log(`Using equaliser: "${multEqName}"`, 'info');
+    if (!targetEq && typeof availableEqs[0] === 'object' && availableEqs[0].manufacturer) {
+      targetEq = availableEqs.find(eq => eq.manufacturer === 'Generic' && eq.model === 'Generic') || availableEqs[0];
+    } else if (!targetEq) {
+      targetEq = { manufacturer: 'Generic', model: 'Generic', name: 'Generic' };
+    }
+
+    // Prepare payload. REW 5.40 expects manufacturer & model. Older REW expects name.
+    const eqPayload = (typeof targetEq === 'object') ? targetEq : { name: targetEq, manufacturer: targetEq, model: targetEq };
+    const eqDisplayName = eqPayload.model || eqPayload.name || 'Generic';
+    state.eqPayload = eqPayload;
+
+    if (!/multieq/i.test(eqDisplayName)) {
+      log(`Using equaliser: "${eqDisplayName}"`, 'info');
     }
 
     for (const ch of state.channels) {
       const ov = state.overrides[ch.commandId];
       if (!ov.enabled) {
         log(`Skipping ${ch.commandId} (disabled in overrides)`, 'warn');
+        continue;
+      }
+
+      // If grouping subs, skip secondary subwoofers in REW since they mirror SW1
+      const isSub = ch.commandId.startsWith('SW');
+      if (isSub && ch.commandId !== 'SW1' && document.getElementById('sub-sync').checked) {
+        log(`Skipping REW import for ${ch.commandId} (will mirror SW1 later)`, 'info');
+        state.channelStatus[ch.commandId] = 'eq-ready'; // Mark ready so export processes it
         continue;
       }
 
@@ -1367,7 +1388,7 @@ async function importToREW() {
       }
 
       // Convert IR data to Base64-encoded 32-bit float array for REW API
-      let irData = irEntry.data || irEntry.responseData || '';
+      let irData = Array.isArray(irEntry) ? irEntry : (irEntry.data || irEntry.responseData || '');
       
       // If irData is already a string that looks like base64, use it as-is
       // Otherwise, convert from the array format to base64
@@ -1427,6 +1448,9 @@ async function importToREW() {
       }
     }
 
+    log('Waiting for REW to process imported measurements...', 'info');
+    await new Promise(r => setTimeout(r, 1500));
+
     // After all imports, fetch the actual measurement list from REW to get correct indices
     log('Fetching measurement list from REW...', 'info');
     try {
@@ -1457,19 +1481,20 @@ async function importToREW() {
       
       // Match imported channels by name to get their actual indices
       let matchedCount = 0;
+      const reversedList = [...measList].reverse();
       for (const ch of state.channels) {
         if (!state.overrides[ch.commandId]?.enabled) continue;
         
-        // Find measurement by name (identifier) - try various property names
-        const meas = measList.find(m => {
-          const name = m?.name || m?.id || m?.identifier || m;
+        // Find measurement by name (identifier) - try various property names including 'title'
+        const meas = reversedList.find(m => {
+          const name = m?.title || m?.name || m?.id || m?.identifier;
           return name === ch.commandId || 
                  name === ch.commandId.replace('SLA', 'SL').replace('SRA', 'SR') ||
                  name === ch.commandId.replace('SLA', 'Surround L').replace('SRA', 'Surround R');
         });
         if (meas) {
-          state.channelUUIDs[ch.commandId] = meas.id || meas.index || meas.uuid || meas;
-          log(`Matched ${ch.commandId} to measurement index: ${state.channelUUIDs[ch.commandId]}`, 'success');
+          state.channelUUIDs[ch.commandId] = meas.uuid || meas.id || meas.index || meas;
+          log(`Matched ${ch.commandId} to measurement: ${state.channelUUIDs[ch.commandId]}`, 'success');
           matchedCount++;
         } else {
           log(`Could not find measurement for ${ch.commandId}`, 'warn');
@@ -1494,8 +1519,8 @@ async function importToREW() {
         if (!uuid) continue;
         
         try {
-          await rewAPI('POST', `/measurements/${uuid}/equaliser`, { name: multEqName });
-          log(`Set "${multEqName}" equaliser on ${ch.commandId} ✓`, 'success');
+          await rewAPI('POST', `/measurements/${uuid}/equaliser`, eqPayload);
+          log(`Set "${eqDisplayName}" equaliser on ${ch.commandId} ✓`, 'success');
         } catch (e) {
           log(`Could not set equaliser on ${ch.commandId}: ${e.message}`, 'warn');
         }
@@ -1529,26 +1554,77 @@ async function runEQMatching() {
   document.getElementById('btn-eq').disabled = true;
   log('Starting EQ matching…', 'info');
 
+  // Fetch UI settings
+  const smoothing = document.getElementById('eq-smoothing').value;
+  const maxCut = parseInt(document.getElementById('eq-max-cut').value, 10);
+  const maxBoost = parseInt(document.getElementById('eq-max-boost').value, 10);
+  const freqLo = parseInt(document.getElementById('eq-freq-lo').value, 10);
+  const freqHi = parseInt(document.getElementById('eq-freq-hi').value, 10);
+
+  // Upload house curve to REW
+  try {
+    const curveText = state.targetCurveCache.map(p => `${p[0]} ${parseFloat(p[1].toFixed(2))}`).join('\n');
+    const port = document.getElementById('rew-port').value || 4735;
+    const res = await fetch(`http://localhost:${port}/eq/house-curve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: curveText
+    });
+    if (res.ok) log('House curve uploaded to REW ✅', 'info');
+    else log('Could not upload house curve (Feature might need newer REW version)', 'warn');
+  } catch(e) {
+    log(`House curve API upload failed: ${e.message}`, 'warn');
+  }
+
   // Apply target curve settings to each measurement, then run EQ
   for (const ch of state.channels) {
-    const uuid = state.channelUUIDs[ch.commandId];
-    if (!uuid) continue;
     const ov = state.overrides[ch.commandId];
     if (!ov.enabled) continue;
+
+    // Skip secondary subs if grouped
+    const isSub = ch.commandId.startsWith('SW');
+    if (isSub && ch.commandId !== 'SW1' && document.getElementById('sub-sync').checked) {
+      log(`Skipping REW EQ for ${ch.commandId} (mirroring SW1)`, 'info');
+      continue;
+    }
+
+    const uuid = state.channelUUIDs[ch.commandId];
+    if (!uuid) continue;
 
     log(`Processing EQ for ${ch.commandId}…`, 'info');
 
     try {
-      // Apply target settings — using "Flat" so REW uses the flat target;
-      // our house curve is captured in the preset and applied via the filter mapping.
+      // 0) Ensure equaliser is explicitly set (fixes 404 filter-tasks on later channels)
+      if (state.eqPayload) {
+        await rewAPI('POST', `/measurements/${uuid}/equaliser`, state.eqPayload).catch(() => {});
+      }
+
+      // 1) Apply smoothing
+      await rewAPI('POST', `/measurements/${uuid}/command`, { 
+        command: 'Apply smoothing', 
+        smoothing: smoothing 
+      }).catch(e => log(`Smoothing not applied: ${e.message}`, 'warn'));
+
+      // 2) Apply target settings — using Speaker to utilize house curve
       await rewAPI('POST', `/measurements/${uuid}/target-settings`, {
-        type: 'Flat',
-        addRoomCurve: false,
+        type: 'Speaker',
+        addRoomCurve: true,
       }).catch(() => log(`target-settings not applied for ${ch.commandId} — continuing`, 'warn'));
 
       // Calculate target level
       await rewAPI('POST', `/measurements/${uuid}/eq/command`,
-        { command: 'Calculate target level' });
+        { command: 'Calculate target level' }).catch(e => log(`Target level calc failed for ${ch.commandId}`, 'warn'));
+
+      // 3) Configure filter tasks (Match Range)
+      await rewAPI('POST', `/measurements/${uuid}/eq/filter-tasks`, {
+        manufacturer: 'Generic',
+        model: 'Generic',
+        matchRangeStart: freqLo,
+        matchRangeEnd: freqHi,
+        maxMatchBoost: maxBoost,
+        maxOverallBoost: maxBoost,
+        individualMaxBoost: maxBoost
+      }).catch(e => log(`filter-tasks config failed for ${ch.commandId}`, 'warn'));
 
       // Match target
       await rewAPI('POST', `/measurements/${uuid}/eq/command`,
@@ -1601,15 +1677,22 @@ function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
    BASE64 ENCODING FOR REW API
 ============================================================ */
 // Convert Float32Array to Base64 string for REW impulse response import
+// REW (Java) expects Big-Endian IEEE 754 32-bit floats.
 function floatArrayToBase64(floatArray) {
-  // Get the underlying ArrayBuffer
-  const buffer = floatArray.buffer;
+  const buffer = new ArrayBuffer(floatArray.length * 4);
+  const view = new DataView(buffer);
+  for (let i = 0; i < floatArray.length; i++) {
+    view.setFloat32(i * 4, floatArray[i], false); // false = Big-Endian
+  }
+  
   // Convert to binary string
   let binary = '';
   const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
   }
+  
   // Encode as base64
   return btoa(binary);
 }
@@ -1654,14 +1737,70 @@ async function exportADY() {
   // Deep clone
   const output = JSON.parse(JSON.stringify(state.adyRaw));
 
+  // Get Subwoofer UI values
+  const alignSubAuto = document.getElementById('sub-xover-auto').checked;
+  const subXover = document.getElementById('sub-xover').value;
+  const subGain = parseFloat(document.getElementById('sub-gain').value) || 0;
+  const subPolarity = document.getElementById('sub-polarity').checked;
+  const subGroup = document.getElementById('sub-group').checked;
+
+  let firstSub = null;
+
   for (const ch of output.detectedChannels) {
     const id = ch.commandId;
+
+    // 1) Apply channel overrides (Distance & Trim)
+    const ov = state.overrides[id];
+    if (ov && ch.channelReport) {
+      if (ov.distance !== null) ch.channelReport.distance = ov.distance;
+      if (ov.trim !== null) ch.channelReport.trimAdjustment = ov.trim;
+    }
+
+    // 2) Apply speaker crossover (if not auto)
+    if (!isSubwoofer(id) && !alignSubAuto) {
+      ch.customCrossover = subXover;
+      // also ensure small speaker type usually for standard crossovers
+      ch.customSpeakerSize = "S";
+    }
+
+    // 3) Apply subwoofer specific integrations
+    if (isSubwoofer(id)) {
+      if (subGain !== 0 && ch.channelReport && ch.channelReport.trimAdjustment !== undefined) {
+        ch.channelReport.trimAdjustment += subGain;
+      }
+      if (subPolarity && ch.channelReport) {
+        ch.channelReport.isReversePolarity = !ch.channelReport.isReversePolarity;
+      }
+      
+      // If Sub Grouping enabled, derive properties from SW1
+      if (subGroup) {
+        if (!firstSub) {
+          firstSub = ch; // First sub acts as the master
+        } else {
+          // Sync SW2+ with SW1 distance/trim
+          if (ch.channelReport && firstSub.channelReport) {
+            ch.channelReport.distance = firstSub.channelReport.distance;
+            ch.channelReport.trimAdjustment = firstSub.channelReport.trimAdjustment;
+            ch.channelReport.isReversePolarity = firstSub.channelReport.isReversePolarity;
+          }
+          // Copy SW1 filters to SW2 if available
+          if (state.generatedFilters[firstSub.commandId]) {
+             state.generatedFilters[id] = [...state.generatedFilters[firstSub.commandId]];
+          }
+        }
+      }
+    }
+
     if (state.generatedFilters[id]) {
       ch.peqFilters = mapFiltersForADY(id);
       state.channelStatus[id] = 'exported';
       log(`Injected ${ch.peqFilters.length} filters into ${id}`, 'info');
     } else {
-      log(`No filters for ${id} — leaving unchanged`, 'warn');
+      if (ov && !ov.enabled) {
+        log(`No filters for ${id} (disabled) — leaving unchanged`, 'warn');
+      } else {
+        log(`No filters for ${id} — leaving unchanged`, 'warn');
+      }
     }
   }
 
