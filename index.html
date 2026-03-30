@@ -4,25 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Audyssey REW Tuner</title>
+  <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css" />
+
   <style>
     /* ============================================================
-       BASE RESET & TOKENS
+       BASE RESET & GSonic COLOR TOKENS (v2)
     ============================================================ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0d1117;
-      --surface:   #161b22;
-      --surface2:  #1f2937;
-      --border:    #21262d;
-      --accent:    #0ea5e9;
-      --accent2:   #2563eb;
-      --text:      #f9fafb;
-      --muted:     #9ca3af;
+      --bg:        #0a0a0f;
+      --surface:   #111318;
+      --surface2:  #1a1d25;
+      --border:    #232736;
+      --accent:    #00d4aa;
+      --accent2:   #0090ff;
+      --text:      #e8e8f0;
+      --muted:     #6b7280;
       --success:   #22c55e;
       --warn:      #f59e0b;
       --error:     #ef4444;
-      --sub-border:#0ea5e9;
+      --sub-border:#00d4aa;
+      --glow:      rgba(0, 212, 170, 0.28);
     }
 
     html { font-size: 15px; }
@@ -46,12 +50,61 @@
     }
 
     /* ============================================================
+       ONBOARDING PROGRESS BAR
+    ============================================================ */
+    #progress-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.6rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    #progress-bar::-webkit-scrollbar { display: none; }
+
+    .progress-step {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--muted);
+      white-space: nowrap;
+      transition: color 0.2s, background 0.2s;
+      flex-shrink: 0;
+    }
+    .progress-step.active { color: var(--accent); background: rgba(0, 212, 170, 0.1); }
+    .progress-step.done   { color: var(--success); }
+    .progress-step-icon   { font-size: 0.9rem; line-height: 1; }
+    .progress-step-check  { display: none; font-size: 0.7rem; }
+    .progress-step.done .progress-step-check { display: inline; }
+    .progress-step.done .progress-step-icon   { display: none; }
+    .progress-connector   { width: 24px; height: 1px; background: var(--border); flex-shrink: 0; }
+
+    /* ============================================================
        APP HEADER
     ============================================================ */
     #app-header {
-      padding: 2rem 0 1.5rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 1.5rem;
+      padding: 1.5rem 0 1.25rem;
+      margin-bottom: 0;
+      position: relative;
+    }
+    #app-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent2) 70%, transparent);
+      opacity: 0.35;
     }
     #app-header h1 {
       font-size: 1.6rem;
@@ -66,19 +119,13 @@
     #app-header p {
       font-size: 0.8125rem;
       color: var(--muted);
-      margin-top: 0.25rem;
+      margin-top: 0.2rem;
     }
     .author {
-      color: var(--accent-pink, #cd248b);
+      color: #cd248b;
       font-size: 0.75rem;
       font-weight: 500;
-      margin-top: 4px;
-    }
-
-    #app-header p {
-      font-size: 0.8125rem;
-      color: var(--muted);
-      margin-top: 0.25rem;
+      margin-top: 3px;
     }
 
     /* ============================================================
@@ -120,7 +167,7 @@
     .panel-body {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.3s ease;
+      transition: max-height 0.35s ease;
     }
     .panel.open .panel-body { max-height: 9999px; }
 
@@ -147,6 +194,7 @@
     }
     input[type="text"]:focus, input[type="number"]:focus, select:focus {
       border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--glow);
     }
 
     input[type="range"] {
@@ -192,7 +240,7 @@
       color: #fff;
     }
     .btn-primary:not(:disabled):hover {
-      box-shadow: 0 4px 16px rgba(14,165,233,0.3);
+      box-shadow: 0 4px 18px rgba(0, 212, 170, 0.4);
     }
 
     .btn-ghost {
@@ -242,7 +290,7 @@
     }
     #drop-zone.dragover {
       border-color: var(--accent);
-      background: rgba(14,165,233,0.05);
+      background: rgba(0, 212, 170, 0.05);
     }
     #drop-zone p { color: var(--muted); font-size: 0.875rem; margin-top: 0.5rem; }
     #drop-zone .drop-icon { font-size: 2.2rem; }
@@ -278,7 +326,7 @@
     tr:hover td { background: rgba(255,255,255,0.02); }
 
     /* ============================================================
-       ASCII PREVIEW
+       ASCII PREVIEW (hidden — replaced by canvas chart)
     ============================================================ */
     #curve-preview {
       background: var(--bg);
@@ -294,6 +342,143 @@
       min-height: 120px;
       margin-top: 0.75rem;
     }
+
+    /* ============================================================
+       EQ CHART (uPlot canvas)
+    ============================================================ */
+    #eq-chart-wrap {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 0.75rem;
+      min-height: 200px;
+    }
+    #eq-chart-wrap .u-wrap { background: var(--bg) !important; }
+
+    /* ============================================================
+       EQ PREVIEW ACCORDION (Story 2)
+    ============================================================ */
+    .preview-channel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      overflow: hidden;
+    }
+    .preview-channel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.55rem 1rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    .preview-channel-header:hover { background: rgba(255,255,255,0.03); }
+    .preview-channel-body { display: none; padding: 0.5rem 1rem 1rem; }
+    .preview-channel.open .preview-channel-body { display: block; }
+    .preview-chart-legend {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    .legend-dot {
+      display: inline-block;
+      width: 10px;
+      height: 3px;
+      border-radius: 2px;
+      margin-right: 0.25rem;
+      vertical-align: middle;
+    }
+
+    /* ============================================================
+       MEASUREMENT WIZARD (Story 3)
+    ============================================================ */
+    #wizard-section { margin-top: 1rem; }
+
+    .wizard-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--surface2);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .wizard-steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex: 1;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .wizard-steps::-webkit-scrollbar { display: none; }
+
+    .wizard-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.2rem;
+      padding: 0.4rem 0.75rem;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .wizard-step::after {
+      content: '';
+      position: absolute;
+      right: -2px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 1px;
+      background: var(--border);
+    }
+    .wizard-step:last-child::after { display: none; }
+
+    .wizard-step-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: var(--surface);
+      transition: all 0.2s;
+    }
+    .wizard-step.done .wizard-step-icon {
+      background: var(--success);
+      border-color: var(--success);
+      color: #fff;
+    }
+    .wizard-step.active .wizard-step-icon {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0, 212, 170, 0.1);
+    }
+    .wizard-step-label { font-size: 0.65rem; color: var(--muted); white-space: nowrap; }
+    .wizard-step.active .wizard-step-label { color: var(--accent); }
+    .wizard-step.done .wizard-step-label { color: var(--success); }
+
+    #wizard-averaging-prompt {
+      margin-top: 0.75rem;
+      padding: 0.875rem 1rem;
+      background: rgba(0, 212, 170, 0.08);
+      border: 1px solid rgba(0, 212, 170, 0.25);
+      border-radius: 8px;
+      font-size: 0.825rem;
+      color: var(--accent);
+      display: none;
+    }
+    #wizard-averaging-prompt strong { display: block; margin-bottom: 0.25rem; }
 
     /* ============================================================
        ACTION CONSOLE
@@ -375,6 +560,13 @@
     /* per-channel override table */
     #override-table input { padding: 0.3rem 0.5rem; font-size: 0.8rem; }
     #override-table td { padding: 0.4rem 0.5rem; }
+
+    /* Mobile progress bar */
+    @media (max-width: 600px) {
+      #progress-bar { padding: 0.5rem 0.75rem; }
+      .progress-step { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
+      .progress-connector { width: 12px; }
+    }
   </style>
 </head>
 <body>
@@ -387,6 +579,45 @@
     <h1>Audyssey REW Tuner</h1>
     <p>Denon X3800H · MultEQ-X · REW API</p>
     <p class="author">by Vasu</p>
+  </div>
+
+  <!-- Onboarding Progress Bar (Story 4) -->
+  <div id="progress-bar" role="navigation" aria-label="Setup progress">
+    <div class="progress-step active" id="step-connect">
+      <span class="progress-step-icon">🔌</span>
+      <span class="progress-step-check">✓</span>
+      <span>Connect REW</span>
+    </div>
+    <div class="progress-connector"></div>
+    <div class="progress-step" id="step-ady">
+      <span class="progress-step-icon">📂</span>
+      <span class="progress-step-check">✓</span>
+      <span>Load ADY</span>
+    </div>
+    <div class="progress-connector"></div>
+    <div class="progress-step" id="step-target">
+      <span class="progress-step-icon">🎯</span>
+      <span class="progress-step-check">✓</span>
+      <span>Target Curve</span>
+    </div>
+    <div class="progress-connector"></div>
+    <div class="progress-step" id="step-import">
+      <span class="progress-step-icon">📥</span>
+      <span class="progress-step-check">✓</span>
+      <span>Import to REW</span>
+    </div>
+    <div class="progress-connector"></div>
+    <div class="progress-step" id="step-eq">
+      <span class="progress-step-icon">⚙️</span>
+      <span class="progress-step-check">✓</span>
+      <span>EQ Match</span>
+    </div>
+    <div class="progress-connector"></div>
+    <div class="progress-step" id="step-export">
+      <span class="progress-step-icon">📤</span>
+      <span class="progress-step-check">✓</span>
+      <span>Export</span>
+    </div>
   </div>
 
   <!-- ======================================================
@@ -439,6 +670,39 @@
           <p>or click to browse</p>
         </div>
         <input type="file" id="file-input" accept=".ady,.json" onchange="onFileSelect(event)" />
+
+        <!-- Measurement Wizard (Story 3) -->
+        <div id="wizard-section">
+          <div class="wizard-header">
+            <button class="btn btn-ghost" id="wizard-toggle-btn" onclick="toggleWizard()"
+                    style="font-size:0.78rem;padding:0.35rem 0.8rem;flex-shrink:0">
+              🧭 Measurement Wizard
+            </button>
+            <div class="wizard-steps" id="wizard-steps" role="list" aria-label="Measurement positions">
+              <div class="wizard-step active" id="wiz-step-0" data-pos="0" role="listitem">
+                <div class="wizard-step-icon">1</div>
+                <div class="wizard-step-label">MLP</div>
+              </div>
+              <div class="wizard-step" id="wiz-step-1" data-pos="1" role="listitem">
+                <div class="wizard-step-icon">2</div>
+                <div class="wizard-step-label">Pos 2</div>
+              </div>
+              <div class="wizard-step" id="wiz-step-2" data-pos="2" role="listitem">
+                <div class="wizard-step-icon">3</div>
+                <div class="wizard-step-label">Pos 3</div>
+              </div>
+              <div class="wizard-step" id="wiz-step-avg" role="listitem">
+                <div class="wizard-step-icon">AVG</div>
+                <div class="wizard-step-label">Average</div>
+              </div>
+            </div>
+          </div>
+          <div id="wizard-averaging-prompt">
+            <strong>📐 Run Spatial Averaging in REW</strong>
+            In REW: Measurement → Average → Select the 3 position measurements → Calculate Average.
+            Then re-export the averaged measurement and reload it here.
+          </div>
+        </div>
 
         <!-- Position selector (shown if multiple positions) -->
         <div id="position-selector" class="mt-2 hidden">
@@ -530,15 +794,40 @@
           </div>
         </div>
 
-        <!-- ASCII preview -->
-        <div id="curve-preview" aria-label="Target curve ASCII preview"></div>
+        <!-- Canvas EQ chart (Story 1) -->
+        <div id="eq-chart-wrap" aria-label="Frequency response chart">
+          <canvas id="eq-chart"></canvas>
+        </div>
 
       </div>
     </div>
   </div>
 
   <!-- ======================================================
-       PANEL 4: EQ SETTINGS
+       PANEL 4: EQ PREVIEW (Story 2)
+  ====================================================== -->
+  <div class="panel" id="panel-eq-preview">
+    <div class="panel-header" onclick="togglePanel('panel-eq-preview')">
+      <div class="panel-header-left">🔊 EQ Preview</div>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="panel-inner">
+        <div id="eq-preview-placeholder" class="text-muted" style="font-size:0.875rem;padding:1.5rem;text-align:center">
+          Run EQ Matching first to see correction previews per channel.
+        </div>
+        <div id="eq-preview-content" class="hidden">
+          <div class="flex-between mb-1" style="margin-bottom:0.75rem">
+            <span class="text-muted" id="eq-preview-summary"></span>
+          </div>
+          <div id="eq-preview-channels"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       PANEL 5: EQ SETTINGS
   ====================================================== -->
   <div class="panel" id="panel-eq">
     <div class="panel-header" onclick="togglePanel('panel-eq')">
@@ -602,11 +891,11 @@
         <div class="field-row">
           <div class="field-group" style="max-width:220px">
             <label for="sub-xover">Crossover Frequency (Hz)</label>
-            <input type="number" id="sub-xover" value="80" min="20" max="200" />
+            <input type="number" id="sub-xover" value="80" min="20" max="200" onchange="persistAllSettings()" />
           </div>
           <div class="field-group" style="flex:0; align-self:flex-end; padding-bottom:0.1rem">
             <label class="flex" style="flex-direction:row; gap:0.4rem; margin-bottom:0; align-items:center; cursor:pointer">
-              <input type="checkbox" id="sub-xover-auto" checked onchange="onSubAutoChange()" />
+              <input type="checkbox" id="sub-xover-auto" checked onchange="onSubAutoChange(); persistAllSettings()" />
               <span>Auto-detect from ADY</span>
             </label>
           </div>
@@ -615,18 +904,24 @@
           <div class="field-group">
             <label for="sub-gain">Sub Integration Gain: <span id="sub-gain-val">0</span> dB</label>
             <input type="range" id="sub-gain" min="0" max="6" step="0.5" value="0"
-                   oninput="document.getElementById('sub-gain-val').textContent=this.value" />
+                   oninput="document.getElementById('sub-gain-val').textContent=this.value; persistAllSettings()" />
           </div>
           <div class="field-group" style="flex:0; align-self:flex-end; padding-bottom:0.2rem">
             <label class="flex" style="flex-direction:row; gap:0.4rem; margin-bottom:0; align-items:center; cursor:pointer">
-              <input type="checkbox" id="sub-polarity" />
+              <input type="checkbox" id="sub-polarity" onchange="persistAllSettings()" />
               <span>Flip Sub Polarity</span>
             </label>
           </div>
           <div class="field-group" style="flex:0; align-self:flex-end; padding-bottom:0.2rem">
             <label class="flex" style="flex-direction:row; gap:0.4rem; margin-bottom:0; align-items:center; cursor:pointer">
-              <input type="checkbox" id="sub-group" checked />
+              <input type="checkbox" id="sub-group" checked onchange="persistAllSettings()" />
               <span>Group SW1+SW2</span>
+            </label>
+          </div>
+          <div class="field-group" style="flex:0; align-self:flex-end; padding-bottom:0.2rem">
+            <label class="flex" style="flex-direction:row; gap:0.4rem; margin-bottom:0; align-items:center; cursor:pointer">
+              <input type="checkbox" id="sub-sync" checked onchange="persistAllSettings()" />
+              <span>Mirror SW1 → SW2</span>
             </label>
           </div>
         </div>
@@ -744,24 +1039,137 @@ const state = {
   connected: false,
   rewVersion: null,
 
-  adyRaw: null,          // original parsed JSON (unmodified)
+  adyRaw: null,
   adyFilename: '',
-  channels: [],          // extracted channel objects
-  positionIndex: 0,      // which IR position to use (MLP = 0)
+  channels: [],
+  positionIndex: 0,
 
-  channelUUIDs: {},      // commandId → REW measurement UUID
+  channelUUIDs: {},
   importedCount: 0,
 
-  customCurvePoints: [], // [[freq, dB], ...] from CSV
-  targetCurveCache: [],  // computed target curve [[freq, dB]]
+  customCurvePoints: [],
+  targetCurveCache: [],
 
-  eqPayload: null,       // cached equalizer type for REW 5.40
+  eqPayload: null,
 
-  generatedFilters: {},  // commandId → FilterSetting[]
-  channelStatus: {},     // commandId → 'pending'|'imported'|'eq-ready'|'exported'
+  generatedFilters: {},
+  channelStatus: {},
 
-  overrides: {},         // commandId → { enabled, distance, trim }
+  overrides: {},
+
+  // Story 3: Multi-position measurement wizard
+  measurementPositions: [false, false, false],  // [pos0, pos1, pos2] loaded flags
+  wizardEnabled: false,
+
+  // Story 1 & 2: Chart data
+  corrections: {},   // commandId → { measured[], target[], corrected[] } at chart frequency points
+  eqChartInstance: null,
 };
+
+/* ============================================================
+   PROGRESS STEP ADVANCER (Story 4)
+============================================================ */
+const PROGRESS_STEPS = ['step-connect', 'step-ady', 'step-target', 'step-import', 'step-eq', 'step-export'];
+
+function advanceStep(stepId) {
+  const idx = PROGRESS_STEPS.indexOf(stepId);
+  if (idx < 0) return;
+  // Mark current and all previous as done
+  PROGRESS_STEPS.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('active');
+    if (i <= idx) el.classList.add('done');
+    else el.classList.remove('done');
+  });
+  // Mark current as active (unless fully done)
+  const current = document.getElementById(stepId);
+  if (current) {
+    current.classList.remove('done');
+    current.classList.add('active');
+  }
+}
+
+/* ============================================================
+   SETTINGS PERSISTENCE (Story 5)
+============================================================ */
+const SETTINGS_KEY = 'audyssey-rew-tuner-v2-settings';
+
+const PERSIST_IDS = [
+  'rew-port', 'curve-preset', 'bass-freq', 'bass-gain',
+  'treble-freq', 'treble-gain',
+  'eq-profile', 'eq-smoothing', 'eq-max-cut', 'eq-max-boost',
+  'eq-freq-lo', 'eq-freq-hi',
+  'sub-xover', 'sub-xover-auto', 'sub-gain', 'sub-polarity', 'sub-group',
+];
+
+function persistAllSettings() {
+  const vals = {};
+  PERSIST_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    vals[id] = el.type === 'checkbox' ? el.checked : el.value;
+  });
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(vals)); } catch(_) {}
+}
+
+function restoreAllSettings() {
+  let vals;
+  try { vals = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch(_) { vals = {}; }
+  PERSIST_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el || !(id in vals)) return;
+    if (el.type === 'checkbox') el.checked = !!vals[id];
+    else el.value = vals[id];
+  });
+  // Sync display values
+  const bg = document.getElementById('bass-gain');
+  if (bg) document.getElementById('bass-gain-val').textContent = bg.value;
+  const tg = document.getElementById('treble-gain');
+  if (tg) document.getElementById('treble-gain-val').textContent = tg.value;
+  const cut = document.getElementById('eq-max-cut');
+  if (cut) document.getElementById('eq-cut-val').textContent = cut.value;
+  const boost = document.getElementById('eq-max-boost');
+  if (boost) document.getElementById('eq-boost-val').textContent = '+' + boost.value;
+}
+
+/* ============================================================
+   MEASUREMENT WIZARD (Story 3)
+============================================================ */
+function toggleWizard() {
+  state.wizardEnabled = !state.wizardEnabled;
+  const btn = document.getElementById('wizard-toggle-btn');
+  if (state.wizardEnabled) {
+    btn.classList.add('btn-primary');
+    btn.classList.remove('btn-ghost');
+    btn.textContent = '🧭 Wizard Active';
+    document.getElementById('wizard-steps').style.display = 'flex';
+  } else {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-ghost');
+    btn.textContent = '🧭 Measurement Wizard';
+    document.getElementById('wizard-steps').style.display = 'none';
+  }
+}
+
+function syncWizardSteps() {
+  // Mark done steps based on loaded positions
+  [0, 1, 2].forEach(i => {
+    const el = document.getElementById(`wiz-step-${i}`);
+    if (!el) return;
+    el.classList.remove('done', 'active');
+    if (state.measurementPositions[i]) el.classList.add('done');
+  });
+  // If all 3 done, show averaging prompt
+  const allDone = state.measurementPositions.every(Boolean);
+  document.getElementById('wizard-averaging-prompt').style.display = allDone ? 'block' : 'none';
+  // Mark avg step
+  const avgEl = document.getElementById('wiz-step-avg');
+  if (avgEl) {
+    avgEl.classList.remove('done', 'active');
+    if (allDone) avgEl.classList.add('done');
+  }
+}
 
 /* ============================================================
    PANEL TOGGLE
@@ -858,6 +1266,7 @@ async function testConnection() {
     statusEl.innerHTML = `<span class="dot"></span>Connected — ${state.rewVersion}`;
     msgEl.textContent = '';
     log(`Connected to REW ${state.rewVersion}`, 'success');
+    advanceStep('step-connect');
     updateActionButtons();
   } catch (e) {
     state.connected = false;
@@ -971,6 +1380,10 @@ function parseADY(json) {
   renderChannelTable();
   renderOverrideTable();
   updateActionButtons();
+  advanceStep('step-ady');
+  advanceStep('step-target');
+  syncWizardSteps();
+  updateChart();
 
   log(`✓ Parsed ${state.channels.length} channels from ${state.adyFilename}`, 'success');
 }
@@ -1250,12 +1663,131 @@ function onSubAutoChange() {
 }
 
 /* ============================================================
-   ASCII CURVE PREVIEW
+   CANVAS EQ CHART via uPlot (Story 1)
+============================================================ */
+const CHART_FREQ_POINTS = (() => {
+  const pts = [];
+  for (let i = 0; i <= 200; i++) {
+    pts.push(20 * Math.pow(1000, i / 200));
+  }
+  return pts;
+})();
+
+// Interpolate any curve array [[freq, dB], ...] at a given freq
+function interpCurve(curve, freq) {
+  const sorted = [...curve].sort((a, b) => a[0] - b[0]);
+  if (freq <= sorted[0][0]) return sorted[0][1];
+  if (freq >= sorted[sorted.length - 1][0]) return sorted[sorted.length - 1][1];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const [f0, d0] = sorted[i];
+    const [f1, d1] = sorted[i + 1];
+    if (freq >= f0 && freq <= f1) {
+      const t = (Math.log(freq) - Math.log(f0)) / (Math.log(f1) - Math.log(f0));
+      return d0 + t * (d1 - d0);
+    }
+  }
+  return 0;
+}
+
+function buildChartSeries(curvePoints) {
+  return CHART_FREQ_POINTS.map(f => [f, interpCurve(curvePoints, f)]);
+}
+
+let _eqChartOpts = null;
+let _eqChartData = null;
+
+function updateChart() {
+  const target = buildTargetCurve();
+  const targetSeries = buildChartSeries(target);
+
+  // Build measured data if available (from ADY file)
+  let measuredSeries = null;
+  if (state.channels.length > 0) {
+    const posIdx = Math.min(state.positionIndex, state.channels[0].responseData.length - 1);
+    const rd = state.channels[0].responseData[posIdx];
+    if (rd && rd.length > 0) {
+      // rd is [[freq, dB], ...] — use it directly
+      const measuredCurve = Array.isArray(rd[0]) ? rd : [];
+      if (measuredCurve.length > 0) {
+        measuredSeries = buildChartSeries(measuredCurve);
+      }
+    }
+  }
+
+  const isDark = true;
+  const gridColor = '#232736';
+  const textColor = '#6b7280';
+
+  const opts = {
+    width: document.getElementById('eq-chart-wrap').clientWidth - 2,
+    height: 200,
+    padding: [8, 8, 24, 48],
+    cursor: { show: true },
+    legend: { show: false },
+    scales: {
+      x: { time: false },
+      y: { auto: false, range: [-30, 20] },
+    },
+    axes: [
+      {
+        stroke: textColor,
+        grid: { stroke: gridColor, width: 1 },
+        ticks: { stroke: gridColor, width: 1 },
+        font: '11px -apple-system, sans-serif',
+        values: (u, vals) => vals.map(v => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : String(Math.round(v))),
+        size: 48,
+      },
+      {
+        stroke: textColor,
+        grid: { stroke: gridColor, width: 1 },
+        ticks: { stroke: gridColor, width: 1 },
+        font: '11px -apple-system, sans-serif',
+        values: (u, vals) => vals.map(v => (v > 0 ? '+' : '') + v.toFixed(0)),
+        size: 48,
+      },
+    ],
+    series: [
+      {},
+      {
+        label: 'Target',
+        stroke: '#00d4aa',
+        width: 2,
+        fill: 'rgba(0,212,170,0.06)',
+      },
+      ...(measuredSeries ? [{
+        label: 'Measured',
+        stroke: '#f59e0b',
+        width: 1.5,
+      }] : []),
+    ],
+  };
+
+  const data = [
+    CHART_FREQ_POINTS,
+    targetSeries.map(p => p[1]),
+    ...(measuredSeries ? [measuredSeries.map(p => p[1])] : []),
+  ];
+
+  if (!state.eqChartInstance) {
+    state.eqChartInstance = new uPlot(opts, data, document.getElementById('eq-chart-wrap'));
+  } else {
+    state.eqChartInstance.setData(data);
+    state.eqChartInstance.setSize({ width: opts.width, height: opts.height });
+  }
+
+  // Also update ASCII preview for fallback
+  updateCurvePreview();
+}
+
+/* ============================================================
+   ASCII CURVE PREVIEW (fallback / hidden)
 ============================================================ */
 function updateCurvePreview() {
+  // ASCII preview kept for accessibility but hidden; chart is primary
   const curve = buildTargetCurve();
   const preview = renderAsciiCurve(curve);
-  document.getElementById('curve-preview').textContent = preview;
+  const el = document.getElementById('curve-preview');
+  if (el) el.textContent = preview;
 }
 
 function renderAsciiCurve(curve) {
@@ -1533,6 +2065,7 @@ async function importToREW() {
     // Skip inhibit restore for REW 5.40 Beta (feature not available)
     state.importedCount = Object.keys(state.channelUUIDs).length;
     log(`Import complete: ${state.importedCount}/${total} channels`, 'success');
+    advanceStep('step-import');
     updateActionButtons();
 
   } catch (e) {
@@ -1647,6 +2180,9 @@ async function runEQMatching() {
 
   renderFilterResults();
   updateActionButtons();
+  advanceStep('step-eq');
+  computeCorrections();
+  renderEQPreview();
   document.getElementById('btn-eq').disabled = false;
   log('EQ matching complete', 'success');
 }
@@ -1815,6 +2351,7 @@ async function exportADY() {
   URL.revokeObjectURL(url);
 
   log(`✅ Export complete — load "${a.download}" in Denon MultEQ Editor and send to X3800H`, 'success');
+  advanceStep('step-export');
 
   // Optional cleanup
   if (document.getElementById('cleanup-rew').checked) {
@@ -1827,6 +2364,136 @@ async function exportADY() {
   }
 
   renderFilterResults(); // refresh status badges
+}
+
+/* ============================================================
+   EQ PREVIEW — compute and render per-channel previews (Story 2)
+============================================================ */
+function computeCorrections() {
+  // Build chart-frequency arrays for measured, target, and corrected for each channel
+  const target = buildTargetCurve();
+  const targetSeries = buildChartSeries(target);
+
+  state.corrections = {};
+  for (const ch of state.channels) {
+    const filters = state.generatedFilters[ch.commandId] || [];
+    const posIdx = Math.min(state.positionIndex, ch.responseData.length - 1);
+    const rd = ch.responseData[posIdx];
+    if (!rd || !Array.isArray(rd) || rd.length === 0) continue;
+
+    const measuredCurve = rd; // [[freq, dB], ...]
+    const measuredSeries = buildChartSeries(measuredCurve);
+
+    // Apply PEQ corrections as a simple additive inverse for preview
+    // corrected ≈ measured − filters (approximate visual correction)
+    const correctedSeries = CHART_FREQ_POINTS.map((f, i) => {
+      let corr = measuredSeries[i] || 0;
+      for (const flt of filters) {
+        const df = Math.log(f / flt.frequency) / Math.log(2); // octaves from center
+        const att = 1 / (1 + df * df / (flt.q * flt.q));
+        corr -= (flt.gain || 0) * Math.max(0, att);
+      }
+      return corr;
+    });
+
+    state.corrections[ch.commandId] = {
+      measured: measuredSeries,
+      target: targetSeries,
+      corrected: correctedSeries,
+    };
+  }
+}
+
+function renderEQPreview() {
+  const channelsWithCorrections = Object.keys(state.corrections);
+  if (channelsWithCorrections.length === 0) return;
+
+  const placeholder = document.getElementById('eq-preview-placeholder');
+  const content = document.getElementById('eq-preview-content');
+  const container = document.getElementById('eq-preview-channels');
+
+  placeholder.classList.add('hidden');
+  content.classList.remove('hidden');
+
+  const gridColor = '#232736';
+  const textColor = '#6b7280';
+
+  container.innerHTML = '';
+  let count = 0;
+
+  for (const id of channelsWithCorrections) {
+    const { measured, target, corrected } = state.corrections[id];
+    if (!measured || !target || !corrected) continue;
+    count++;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'preview-channel';
+    wrap.innerHTML = `
+      <div class="preview-channel-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>${id}</span>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <span class="badge badge-eq-ready"><span class="dot"></span>Preview</span>
+        </div>
+      </div>
+      <div class="preview-channel-body">
+        <div class="preview-chart-legend">
+          <span><span class="legend-dot" style="background:#f59e0b"></span>Measured</span>
+          <span><span class="legend-dot" style="background:#00d4aa"></span>Target</span>
+          <span><span class="legend-dot" style="background:#22c55e"></span>Corrected</span>
+        </div>
+        <div id="eq-preview-chart-${count}" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;overflow:hidden;min-height:160px"></div>
+      </div>
+    `;
+    container.appendChild(wrap);
+
+    // Draw mini chart after element is inserted
+    setTimeout(() => {
+      const chartEl = document.getElementById(`eq-preview-chart-${count}`);
+      if (!chartEl) return;
+      const miniOpts = {
+        width: chartEl.clientWidth - 2 || 400,
+        height: 160,
+        padding: [4, 4, 20, 40],
+        cursor: { show: true },
+        legend: { show: false },
+        scales: {
+          x: { time: false },
+          y: { auto: false, range: [-30, 20] },
+        },
+        axes: [
+          {
+            stroke: textColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 },
+            font: '10px -apple-system, sans-serif',
+            values: (u, vals) => vals.map(v => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : String(Math.round(v))),
+            size: 40,
+          },
+          {
+            stroke: textColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 },
+            font: '10px -apple-system, sans-serif',
+            values: (u, vals) => vals.map(v => (v > 0 ? '+' : '') + v.toFixed(0)),
+            size: 40,
+          },
+        ],
+        series: [
+          {},
+          { label: 'Measured', stroke: '#f59e0b', width: 1.5 },
+          { label: 'Target',    stroke: '#00d4aa', width: 2 },
+          { label: 'Corrected',stroke: '#22c55e', width: 1.5 },
+        ],
+      };
+      const miniData = [
+        CHART_FREQ_POINTS,
+        measured.map(p => p[1]),
+        target.map(p => p[1]),
+        corrected,
+      ];
+      try { new uPlot(miniOpts, miniData, chartEl); } catch(e) { console.error('uPlot mini chart error:', e); }
+    }, 50);
+  }
+
+  document.getElementById('eq-preview-summary').textContent =
+    `${count} channel${count !== 1 ? 's' : ''} with correction previews`;
+  document.getElementById('panel-eq-preview').classList.add('open');
 }
 
 /* ============================================================
@@ -1916,20 +2583,26 @@ function updateActionButtons() {
    INIT
 ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
-  // Restore saved port
+  // Story 5: Restore all saved settings from localStorage
+  restoreAllSettings();
+
+  // Story 4: Restore saved port for connection
   const savedPort = localStorage.getItem('rew_port');
   if (savedPort) {
     document.getElementById('rew-port').value = savedPort;
     testConnection();
   }
 
-  // Initial curve preview
-  updateCurvePreview();
+  // Story 3: Hide wizard by default
+  document.getElementById('wizard-steps').style.display = 'none';
+
+  // Story 1: Initialise chart with flat target
+  updateChart();
 
   // Open target panel for visibility
   document.getElementById('panel-target').classList.add('open');
 
-  log('Audyssey REW Tuner loaded. Load an ADY file and connect to REW to begin.', 'info');
+  log('Audyssey REW Tuner v2 loaded. Connect to REW and load an ADY file to begin.', 'info');
 });
 </script>
 </body>
