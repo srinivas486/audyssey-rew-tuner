@@ -2,12 +2,22 @@
 
 A single-page HTML tool for tuning Denon Audyssey `.ady` files using Room EQ Wizard (REW).
 
+## What's New in v2
+
+- **Canvas EQ Chart** — uPlot-powered log-frequency chart (20Hz–20kHz) showing Target vs Measured response in real time
+- **EQ Match Preview** — Per-channel accordion panels showing Measured, Target, and Corrected curves after EQ matching
+- **Multi-Position Measurement Wizard** — Track up to 3 measurement positions with a visual step indicator; prompts for spatial averaging when all positions are loaded
+- **Onboarding Progress Bar** — Sticky 6-step indicator auto-advances as you work (Connect REW → Load ADY → Target Curve → Import → EQ Match → Export)
+- **Settings Persistence** — All port, curve, EQ, and sub settings auto-saved to localStorage and restored on reload
+- **GSonic-Inspired UI** — Dark `#0a0a0f` palette with teal `#00d4aa` accents, smooth panel animations, focused-input glow, and gradient header divider
+
 ## What It Does
 
 1. **Parses** your Denon MultEQ Editor `.ady` file — extracts channel measurements, distances, trims, delays, and polarity
 2. **Imports** impulse responses into REW via its REST API
 3. **Generates** corrective PEQ filters matched to a target curve of your choice
-4. **Exports** a tuned `.ady` file ready to load back into the Denon MultEQ Editor app and send to your AVR
+4. **Previews** correction results per-channel with an interactive chart
+5. **Exports** a tuned `.ady` file ready to load back into the Denon MultEQ Editor app and send to your AVR
 
 ## Target Hardware
 
