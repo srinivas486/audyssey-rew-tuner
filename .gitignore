@@ -12,3 +12,5 @@ flow.html
 .openclaw/
 .DS_Store
 node_modules/
+a1-evo-acoustix-linux-x64*
+*.bin
