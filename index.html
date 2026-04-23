@@ -6,6 +6,7 @@
   <title>Audyssey REW Tuner</title>
   <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css" />
+  <link rel="stylesheet" href="css/a1evo.css" />
 
   <style>
     /* ============================================================
@@ -2605,5 +2606,313 @@ document.addEventListener('DOMContentLoaded', () => {
   log('Audyssey REW Tuner v2 loaded. Connect to REW and load an ADY file to begin.', 'info');
 });
 </script>
+
+<!-- A1 Evo AcoustiX Panel -->
+<div id="a1evo-panel" style="display:none;">
+  <div class="a1evo-container">
+    <div class="a1evo-header">
+      <div class="a1evo-header-left">
+        <h1 class="a1evo-title">A1 Evo <span>AcoustiX</span></h1>
+      </div>
+      <div class="a1evo-header-controls">
+        <div class="a1evo-avr-status">
+          <span class="a1evo-status-dot" id="a1evo-status-dot"></span>
+          <span id="a1evo-avr-status">Not connected</span>
+        </div>
+        <button class="a1evo-discover-btn" id="a1evo-discover-btn">🔍 Find AVR</button>
+        <select id="a1evo-avr-select" class="a1evo-select" style="max-width:180px;display:none;"></select>
+        <button class="a1evo-discover-btn" id="a1evo-connect-btn" style="display:none;">Connect</button>
+        <button class="a1evo-discover-btn" id="a1evo-disconnect-btn" style="display:none;background:#ef4444;">Disconnect</button>
+        <a href="https://revolut.me/serko70" target="_blank" class="a1evo-support-btn">
+          <span>♥</span> Support project
+        </a>
+      </div>
+    </div>
+
+    <form id="a1evo-settings-form">
+      <div class="a1evo-main-content">
+        <!-- Column 1: Target Response -->
+        <div class="a1evo-column">
+          <h2 class="a1evo-section-title">Target Response</h2>
+          <div class="a1evo-form-group">
+            <label for="targetCurve">Target Curve File</label>
+            <select id="targetCurve" name="targetCurve" class="a1evo-select"></select>
+          </div>
+          <div class="a1evo-form-group" style="height:180px;padding:10px;background:#121212;border:1px solid #37474f;">
+            <canvas id="curveChart" class="a1evo-chart-canvas"></canvas>
+          </div>
+
+          <h2 class="a1evo-section-title">Crossover Frequency Search Range</h2>
+          <div class="a1evo-form-group" id="frontsXOGroup">
+            <div class="a1evo-range-group"><label id="lbl_frontsXO">Fronts Range</label><output>40 Hz - 250 Hz</output></div>
+            <div class="a1evo-crossover-slider"><div class="track"></div><div class="track-infill"></div><input type="range" name="frontsCrossoverMin" min="40" max="250" value="40"><input type="range" name="frontsCrossoverMax" min="40" max="250" value="250"></div>
+          </div>
+          <div class="a1evo-form-group" id="centerXOGroup">
+            <div class="a1evo-range-group"><label id="lbl_centerXO">Center Range</label><output>40 Hz - 250 Hz</output></div>
+            <div class="a1evo-crossover-slider"><div class="track"></div><div class="track-infill"></div><input type="range" name="centerCrossoverMin" min="40" max="250" value="40"><input type="range" name="centerCrossoverMax" min="40" max="250" value="250"></div>
+          </div>
+          <div class="a1evo-form-group" id="surroundsXOGroup">
+            <div class="a1evo-range-group"><label id="lbl_surroundsXO">Surrounds Range</label><output>40 Hz - 250 Hz</output></div>
+            <div class="a1evo-crossover-slider"><div class="track"></div><div class="track-infill"></div><input type="range" name="surroundsCrossoverMin" min="40" max="250" value="40"><input type="range" name="surroundsCrossoverMax" min="40" max="250" value="250"></div>
+          </div>
+          <div class="a1evo-form-group" id="atmosXOGroup">
+            <div class="a1evo-range-group"><label id="lbl_atmosXO">Atmos / Height Range</label><output>40 Hz - 250 Hz</output></div>
+            <div class="a1evo-crossover-slider"><div class="track"></div><div class="track-infill"></div><input type="range" name="atmosCrossoverMin" min="40" max="250" value="40"><input type="range" name="atmosCrossoverMax" min="40" max="250" value="250"></div>
+          </div>
+
+          <h2 class="a1evo-section-title">Max EQ Frequency</h2>
+          <div class="a1evo-form-group" id="frontsEqGroup">
+            <div class="a1evo-range-group"><label for="frontsEqLimit">Fronts Cutoff</label><output for="frontsEqLimit">200 Hz</output></div>
+            <input type="range" id="frontsEqLimit" name="frontsEqLimit" min="150" max="500" step="5" value="200" class="a1evo-single-slider">
+          </div>
+          <div class="a1evo-form-group" id="centerEqGroup">
+            <div class="a1evo-range-group"><label for="centerEqLimit">Center Cutoff</label><output for="centerEqLimit">250 Hz</output></div>
+            <input type="range" id="centerEqLimit" name="centerEqLimit" min="150" max="500" step="5" value="225" class="a1evo-single-slider">
+          </div>
+          <div class="a1evo-form-group" id="surroundsEqGroup">
+            <div class="a1evo-range-group"><label for="surroundsEqLimit">Surrounds Cutoff</label><output for="surroundsEqLimit">250 Hz</output></div>
+            <input type="range" id="surroundsEqLimit" name="surroundsEqLimit" min="150" max="500" step="5" value="225" class="a1evo-single-slider">
+          </div>
+          <div class="a1evo-form-group" id="atmosEqGroup">
+            <div class="a1evo-range-group"><label for="atmosEqLimit">Atmos / Height Cutoff</label><output for="atmosEqLimit">250 Hz</output></div>
+            <input type="range" id="atmosEqLimit" name="atmosEqLimit" min="150" max="500" step="5" value="225" class="a1evo-single-slider">
+          </div>
+        </div>
+
+        <!-- Column 2: Bass Management -->
+        <div class="a1evo-column">
+          <h2 class="a1evo-section-title">Bass Management</h2>
+          <div class="a1evo-form-group">
+            <label>Subwoofer Mode</label>
+            <div class="a1evo-subwoofer-row">
+              <select id="subwooferMode" name="subwooferMode" class="a1evo-select">
+                <option value="single">Single Sub</option>
+                <option value="dual">Dual Sub (SW1)</option>
+                <option value="dual2">Dual Sub (SW2)</option>
+              </select>
+            </div>
+          </div>
+          <div class="a1evo-form-group" id="doubleBassGroup">
+            <div class="a1evo-label-with-toggle">
+              <label for="doubleBass"><span class="a1evo-locked-badge">LOCKED</span>Double Bass / LFE+Main</label>
+              <label class="a1evo-toggle">
+                <input type="checkbox" id="doubleBass" name="doubleBass">
+                <span class="a1evo-slider-round"></span>
+              </label>
+            </div>
+          </div>
+          <div class="a1evo-form-group" id="bass-extraction-wrapper">
+            <div class="a1evo-range-group">
+              <label for="bassExtractionFreq">Bass Extraction Cutoff</label>
+              <output for="bassExtractionFreq">120 Hz</output>
+            </div>
+            <input type="range" id="bassExtractionFreq" name="bassExtractionFreq" min="0" max="11" value="7" class="a1evo-single-slider">
+          </div>
+          <div class="a1evo-form-group" id="mimoGroup">
+            <div class="a1evo-label-with-toggle">
+              <label for="enableMimo">Enable MIMO Processing</label>
+              <label class="a1evo-toggle">
+                <input type="checkbox" id="enableMimo" name="enableMimo">
+                <span class="a1evo-slider-round"></span>
+              </label>
+            </div>
+          </div>
+          <div class="a1evo-form-group" id="mimo-cutoff-wrapper">
+            <div class="a1evo-range-group">
+              <label for="mimoCutoffFreq">MIMO Upper Limit</label>
+              <output for="mimoCutoffFreq">250 Hz</output>
+            </div>
+            <input type="range" id="mimoCutoffFreq" name="mimoCutoffFreq" min="0" max="11" value="11" class="a1evo-single-slider">
+          </div>
+
+          <h2 class="a1evo-section-title">Subwoofer Alignment</h2>
+          <div class="a1evo-form-group">
+            <label>Subwoofer Alignment Targets</label>
+            <div class="a1evo-checkbox-group">
+              <label for="includeFrontMains"><input type="checkbox" id="includeFrontMains" name="includeFrontMains" checked disabled> Front</label>
+              <label for="includeCenter"><input type="checkbox" id="includeCenter" name="includeCenter"> Center</label>
+              <label for="includeOtherFloor"><input type="checkbox" id="includeOtherFloor" name="includeOtherFloor"> Surround</label>
+              <label for="includeHeights"><input type="checkbox" id="includeHeights" name="includeHeights"> Atmos</label>
+            </div>
+          </div>
+          <div class="a1evo-form-group">
+            <div class="a1evo-label-with-toggle">
+              <label for="useIRStartAlignment">Sync All Impulse Start Times</label>
+              <label class="a1evo-toggle">
+                <input type="checkbox" id="useIRStartAlignment" name="useIRStartAlignment">
+                <span class="a1evo-slider-round"></span>
+              </label>
+            </div>
+          </div>
+          <div class="a1evo-form-group">
+            <div class="a1evo-label-with-toggle">
+              <label for="avoidSubInversion">Keep Subs Default Polarity</label>
+              <label class="a1evo-toggle">
+                <input type="checkbox" id="avoidSubInversion" name="avoidSubInversion">
+                <span class="a1evo-slider-round"></span>
+              </label>
+            </div>
+          </div>
+          <div class="a1evo-form-group" id="subEqRangeGroup">
+            <div class="a1evo-range-group"><label id="lbl_subEqRange">Sub(s) Phase-Lock Zone</label><output>20 Hz - 250 Hz</output></div>
+            <div class="a1evo-crossover-slider" id="subEqRangeSlider"><div class="track"></div><div class="track-infill"></div><input type="range" name="subEqRangeMin"><input type="range" name="subEqRangeMax"></div>
+          </div>
+
+          <h2 class="a1evo-section-title">Filter Boost Levels</h2>
+          <div class="a1evo-form-group">
+            <div class="a1evo-range-group"><label for="eqMaxGain">Subwoofer EQ Max Gain</label><output for="eqMaxGain">0 dB</output></div>
+            <input type="range" id="eqMaxGain" name="eqMaxGain" min="0" max="6" step="0.1" value="0" class="a1evo-single-slider">
+          </div>
+          <div class="a1evo-form-group">
+            <div class="a1evo-range-group"><label for="frontsEqMaxGain">Fronts EQ Max Boost</label><output for="frontsEqMaxGain">0 dB</output></div>
+            <input type="range" id="frontsEqMaxGain" name="frontsEqMaxGain" min="0" max="6" step="0.1" value="0" class="a1evo-single-slider">
+          </div>
+          <div class="a1evo-form-group">
+            <div class="a1evo-range-group"><label for="centerEqMaxGain">Center EQ Max Boost</label><output for="centerEqMaxGain">0 dB</output></div>
+            <input type="range" id="centerEqMaxGain" name="centerEqMaxGain" min="0" max="6" step="0.1" value="0" class="a1evo-single-slider">
+          </div>
+          <div class="a1evo-form-group">
+            <div class="a1evo-range-group"><label for="surroundsEqMaxGain">Surround EQ Max Boost</label><output for="surroundsEqMaxGain">0 dB</output></div>
+            <input type="range" id="surroundsEqMaxGain" name="surroundsEqMaxGain" min="0" max="6" step="0.1" value="0" class="a1evo-single-slider">
+          </div>
+          <div class="a1evo-form-group">
+            <div class="a1evo-range-group"><label for="atmosEqMaxGain">Atmos EQ Max Boost</label><output for="atmosEqMaxGain">0 dB</output></div>
+            <input type="range" id="atmosEqMaxGain" name="atmosEqMaxGain" min="0" max="6" step="0.1" value="0" class="a1evo-single-slider">
+          </div>
+
+          <h2 class="a1evo-section-title">LPF for LFE</h2>
+          <div class="a1evo-form-group">
+            <div class="a1evo-range-group"><label for="lpfForLFE">LPF for LFE</label><output for="lpfForLFE">120 Hz</output></div>
+            <input type="range" id="lpfForLFE" name="lpfForLFE" class="a1evo-single-slider">
+          </div>
+
+          <h2 class="a1evo-section-title">THX Mode</h2>
+          <div class="a1evo-form-group">
+            <div class="a1evo-label-with-toggle">
+              <label for="thxMode">THX Cinema Mode</label>
+              <label class="a1evo-toggle">
+                <input type="checkbox" id="thxMode" name="thxMode">
+                <span class="a1evo-slider-round"></span>
+              </label>
+            </div>
+            <div id="thxOptions" style="display:none;margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;">
+              <label for="thxAllpassMode" style="margin-bottom:5px;font-size:11px;text-transform:uppercase;color:var(--a1-text-muted);">Allpass Filter Application</label>
+              <select id="thxAllpassMode" name="thxAllpassMode" class="a1evo-select">
+                <option value="both" selected>Add Allpass filters both ways (Default)</option>
+                <option value="sub">Add Allpass filter to Subwoofer Only</option>
+                <option value="speaker">Add Allpass filters to Speakers Only</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 3: Interactive -->
+        <div class="a1evo-column">
+          <h2 class="a1evo-section-title">Interactive</h2>
+          <div class="a1evo-form-group">
+            <div class="a1evo-label-with-toggle">
+              <label for="allowCustomVolume">Interactive Volume Levelling Mode</label>
+              <label class="a1evo-toggle">
+                <input type="checkbox" id="allowCustomVolume" name="allowCustomVolume">
+                <span class="a1evo-slider-round"></span>
+              </label>
+            </div>
+          </div>
+          <div class="a1evo-form-group">
+            <div class="a1evo-label-with-toggle">
+              <label for="allowManualAlignment">Allow Manual Time Alignment</label>
+              <label class="a1evo-toggle">
+                <input type="checkbox" id="allowManualAlignment" name="allowManualAlignment">
+                <span class="a1evo-slider-round"></span>
+              </label>
+            </div>
+          </div>
+          <div class="a1evo-form-group">
+            <div class="a1evo-label-with-toggle">
+              <label for="enableCustomFilters">Add Custom Filters</label>
+              <label class="a1evo-toggle">
+                <input type="checkbox" id="enableCustomFilters" name="enableCustomFilters">
+                <span class="a1evo-slider-round"></span>
+              </label>
+            </div>
+          </div>
+
+          <h2 class="a1evo-section-title">Low Volume Listening Compensation</h2>
+          <div class="a1evo-form-group">
+            <div class="a1evo-range-group"><label for="lowVolListeningOffset">Bass Boost</label><output for="lowVolListeningOffset">6 dB</output></div>
+            <input type="range" id="lowVolListeningOffset" name="lowVolListeningOffset" min="0" max="9" step="0.1" value="8.5" class="a1evo-single-slider">
+          </div>
+          <div class="a1evo-form-group">
+            <div class="a1evo-range-group"><label for="lowVolListeningOffsetHi">Treble Boost</label><output for="lowVolListeningOffsetHi">6 dB</output></div>
+            <input type="range" id="lowVolListeningOffsetHi" name="lowVolListeningOffsetHi" min="0" max="6" step="0.1" value="2.4" class="a1evo-single-slider">
+          </div>
+
+          <h2 class="a1evo-section-title">Tactile Transducer</h2>
+          <div class="a1evo-form-group">
+            <div class="a1evo-label-with-toggle">
+              <label for="addBassShaker">Enable Bass Shaker Customization</label>
+              <label class="a1evo-toggle">
+                <input type="checkbox" id="addBassShaker" name="addBassShaker">
+                <span class="a1evo-slider-round"></span>
+              </label>
+            </div>
+          </div>
+          <div id="bass-shaker-controls-wrapper" class="disabled">
+            <div class="a1evo-form-group">
+              <label for="bassShakerCurve">Shaker Target Curve</label>
+              <select id="bassShakerCurve" name="bassShakerCurve" class="a1evo-select"></select>
+            </div>
+            <div class="a1evo-form-group" style="height:120px;padding:10px;background:#121212;border:1px solid #37474f;">
+              <canvas id="bassShakerChart" class="a1evo-chart-canvas"></canvas>
+            </div>
+            <div class="a1evo-form-group">
+              <div class="a1evo-range-group"><label for="bassShakerVolume">Gain Offset</label><output for="bassShakerVolume">0 dB</output></div>
+              <input type="range" id="bassShakerVolume" name="bassShakerVolume" min="-12" max="12" value="0" class="a1evo-single-slider">
+            </div>
+            <div class="a1evo-form-group">
+              <div class="a1evo-label-with-toggle">
+                <label for="invertShakerPolarity">Invert TR Polarity</label>
+                <label class="a1evo-toggle">
+                  <input type="checkbox" id="invertShakerPolarity" name="invertShakerPolarity">
+                  <span class="a1evo-slider-round"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <h2 class="a1evo-section-title">Calibration Files</h2>
+          <div class="a1evo-form-group">
+            <label>Save / Load Calibration</label>
+            <div style="display:flex;gap:8px;margin-top:6px;">
+              <input type="text" id="calibration-name" name="calibrationName" placeholder="calibration-name" class="a1evo-select" style="flex:1;">
+              <button type="button" id="btn-save-cal" style="padding:8px 12px;background:#ffb300;color:#263238;border:none;border-radius:4px;cursor:pointer;font-weight:700;font-size:12px;">Save .oca</button>
+              <button type="button" id="btn-load-cal" style="padding:8px 12px;background:#263238;color:#eceff1;border:1px solid #455a64;border-radius:4px;cursor:pointer;font-weight:700;font-size:12px;">Load</button>
+            </div>
+          </div>
+          <div class="a1evo-form-group">
+            <label>Import .ady (Denon MultEQ Editor)</label>
+            <input type="file" id="ady-file-input" accept=".ady,.json" style="font-size:12px;color:var(--a1-text-muted);margin-top:6px;">
+          </div>
+        </div>
+      </div>
+
+      <div class="a1evo-button-group">
+        <div id="a1evo-optimization-progress" class="a1evo-progress">
+          <span id="a1evo-progress-msg">Ready</span>
+          <div class="a1evo-progress-bar"><div class="a1evo-progress-fill" id="a1evo-progress-fill" style="width:0%;"></div></div>
+        </div>
+        <button type="button" class="a1evo-save-btn" id="a1evo-start-optimization">START OPTIMIZATION</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- A1 Evo JS Modules -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.js"></script>
+<script src="js/a1evo-charts.js"></script>
+<script src="js/a1evo-app.js"></script>
+<script src="js/a1evo-calibration.js"></script>
+<script src="js/a1evo-rew.js"></script>
+
 </body>
 </html>
