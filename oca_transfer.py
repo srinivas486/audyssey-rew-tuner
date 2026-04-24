@@ -6,15 +6,15 @@ PROTOCOL: Binary TCP on port 1256
 CONFIRMED: April 24, 2026
 
 Usage:
-    python3 oca_transfer.py <oca_file> [AVR_IP] [--preset A|B]
+    python3 oca_transfer.py <oca_file> [AVR_IP] [--preset 1|2]
 
 Examples:
-    python3 oca_transfer.py calibration.oca 192.168.50.2
-    python3 oca_transfer.py my_oca.oca --preset B
-    python3 oca_transfer.py front_heights.oca 192.168.50.2 --preset A
+    python3 oca_transfer.py calibration.oca
+    python3 oca_transfer.py my_oca.oca --preset 2
+    python3 oca_transfer.py front_heights.oca 192.168.50.2 --preset 1
 
-X3800H has two Audyssey presets (A and B). Use --preset to choose.
-Default preset: A
+X3800H has two Audyssey presets (1 and 2). Use --preset to choose.
+Default preset: 1
 
 For each OCA file you upload, also keep the matching pcap next to it
 (named same as OCA but .pcapng). The script will auto-detect and use it
@@ -27,8 +27,7 @@ from pathlib import Path
 
 PORT = 1256
 
-# ─── Protocol constants ────────────────────────────────────────────────────────
-
+# Protocol constants
 MARKER = 0x54
 FLAG_SET_COEF = 0x08
 META_COEF = bytes([0x02, 0x00, 0x01, 0x00])
@@ -36,10 +35,10 @@ SR_CODE = {32000: 0, 44100: 52, 48000: 57, 96000: 184}
 
 CH_NAMES = ['FL', 'C', 'FR', 'SBR', 'SBL', 'FHL', 'FHR', 'SW1', 'SW2', 'FDL', 'FDR']
 
-# ─── Protocol helpers ──────────────────────────────────────────────────────────
+
+# ─── pcap reader ──────────────────────────────────────────────────────────────
 
 def pcap_reader(data):
-    """Yield (block_num, file_pos, tcp_payload) for SET_SETDAT/SET_COEFDT msgs."""
     bo = '<'
     pos = 0
     block_num = 0
@@ -66,7 +65,6 @@ def pcap_reader(data):
 
 
 def extract_pcap_configs(pcap_path: Path):
-    """Extract SET_SETDAT messages from pcap."""
     with open(pcap_path, 'rb') as f:
         data = f.read()
     msgs = []
@@ -77,58 +75,41 @@ def extract_pcap_configs(pcap_path: Path):
     return msgs
 
 
-def build_oca_config(oca: dict, preset: str = 'A'):
-    """
-    Build SET_SETDAT config messages from OCA data.
-    
-    Creates config for the specified preset (A or B).
-    X3800H stores two full calibrations; preset is encoded in the
-    channel/SR bytes of each message.
-    
-    Returns list of raw config message bytes.
-    """
-    # OCA channel order matches protocol channel indices
+# ─── config builder ───────────────────────────────────────────────────────────
+
+def build_oca_config(oca: dict, preset: str = '1'):
+    """Build SET_SETDAT config messages from OCA data for preset 1 or 2."""
     msgs = []
-    
-    # Build distance + trim config per channel
-    # Byte layout (from pcap analysis): T + counter + flag + cmd + null + meta + channel + SR + data
-    # Config data encodes: distance(mm), trim(x10), xover, etc.
-    
-    # For now, build minimal config from OCA channel data
-    # This mirrors what AcoustiX sends: one SET_SETDAT per channel with distance/trim
     counter = 0x1300
-    
+
     for ch in oca.get('channels', []):
         ch_idx = ch.get('channel', 0)
         dist_mm = int(ch.get('distanceInMeters', 2.5) * 1000)
         trim_x10 = int(ch.get('trimAdjustmentInDbs', 0.0) * 10)
-        
-        # Preset encoding: SR code high bits encode preset
-        # From pcap: preset A uses SR 0, preset B uses SR 128 (0x80)
-        sr_base = 0 if preset == 'A' else 128
-        
-        # Config data: distance (4 bytes LE) + trim (2 bytes LE) + ...
+        # Preset 1 = SR base 0, Preset 2 = SR base 128 (from pcap analysis)
+        sr_base = 0 if preset == '1' else 128
+
         dist_bytes = struct.pack('<I', dist_mm)
         trim_bytes = struct.pack('<h', trim_x10)
-        
-        # Build minimal SET_SETDAT (config only, not coefficients)
-        data = dist_bytes + trim_bytes + bytes(14)  # pad to 20 bytes
-        
+        data = dist_bytes + trim_bytes + bytes(14)
+
         msg = (
             bytes([MARKER]) +
             counter.to_bytes(3, 'little') +
             bytes([FLAG_SET_COEF]) +
             b'SET_SETDAT' +
             bytes([0x00]) +
-            bytes([0x02, 0x00, 0x00, 0x00]) +  # meta (config type)
+            bytes([0x02, 0x00, 0x00, 0x00]) +
             bytes([ch_idx, sr_base]) +
             data
         )
         msgs.append(msg)
         counter += 1
-    
+
     return msgs
 
+
+# ─── coefficient message builder ──────────────────────────────────────────────
 
 def build_coef_msg(channel, sr_code, coefficients, counter):
     """Build a 531-byte SET_COEFDT message with LE float32 at offset 22."""
@@ -149,8 +130,9 @@ def build_coef_msg(channel, sr_code, coefficients, counter):
     )
 
 
+# ─── send helpers ─────────────────────────────────────────────────────────────
+
 def send_all(sock, msgs, delay=0.02):
-    """Send messages with small inter-message delay, return ACKs received."""
     for msg in msgs:
         sock.send(msg)
         time.sleep(delay)
@@ -178,13 +160,13 @@ def send_all(sock, msgs, delay=0.02):
     return acks
 
 
-# ─── Transfer ──────────────────────────────────────────────────────────────────
+# ─── main transfer ─────────────────────────────────────────────────────────────
 
-def transfer(oca_path: Path, ip: str, preset: str = 'A'):
+def transfer(oca_path: Path, ip: str, preset: str = '1'):
     print(f"=== OCA Transfer ===")
     print(f"File: {oca_path.name}")
     print(f"Target: {ip}:{PORT}")
-    print(f"Preset: {preset}\n")
+    print(f"Preset: {preset} (Audyssey slot)\n")
 
     # Load OCA
     with open(oca_path, 'r') as f:
@@ -194,11 +176,9 @@ def transfer(oca_path: Path, ip: str, preset: str = 'A'):
         print(f"  Ch{i} ({CH_NAMES[i]}): {len(ch['filter'])} filters"
               f" | trim={ch['trimAdjustmentInDbs']}dB | dist={ch['distanceInMeters']}m")
 
-    # Try to find matching pcap for config
-    # Look for pcap with same embedded timestamp as OCA file
-    # OCA filename format: A1EvoAcoustiX_<date>_<time>_<timestamp>..oca
+    # Auto-detect matching pcap by timestamp in filename
     pcap_path = None
-    stem = oca_path.stem.rstrip('.').split('..')[0]  # 'A1EvoAcoustiX_Apr24_1844_1777065760128'
+    stem = oca_path.stem.rstrip('.').split('..')[0]
     timestamp = None
     for part in stem.split('_'):
         if part.isdigit() and len(part) >= 10:
@@ -229,10 +209,8 @@ def transfer(oca_path: Path, ip: str, preset: str = 'A'):
     coef_msgs = []
     counter_base = 0x1300
 
-    # SR code for preset: 0=A, 184=B (96kHz encodes preset B)
-    # Actually from pcap: SR=0 for preset A
-    # Preset B uses a different SR value — use 184 (96kHz) as preset B marker
-    sr_code = 0 if preset == 'A' else 184
+    # Preset 1 = SR 0, Preset 2 = SR 184 (96kHz encodes preset 2)
+    sr_code = 0 if preset == '1' else 184
 
     for ch_idx, ch_data in enumerate(oca['channels']):
         filters = ch_data['filter']
@@ -242,7 +220,7 @@ def transfer(oca_path: Path, ip: str, preset: str = 'A'):
             chunk = filters[msg_idx * 126 : msg_idx * 126 + 126]
             msg = build_coef_msg(ch_idx, sr_code, chunk, counter)
             coef_msgs.append(msg)
-        print(f"  Ch{ch_idx} ({CH_NAMES[ch_idx]}): {len(filters)} filters → {num_msgs} msgs")
+        print(f"  Ch{ch_idx} ({CH_NAMES[ch_idx]}): {len(filters)} filters -> {num_msgs} msgs")
 
     print(f"Total: {len(coef_msgs)} coefficient messages\n")
 
@@ -298,20 +276,20 @@ def transfer(oca_path: Path, ip: str, preset: str = 'A'):
     sock.close()
     print("Disconnected")
     print("\n" + "="*50)
-    print(f"TRANSFER COMPLETE ({preset}) — power cycle AVR to apply")
+    print(f"TRANSFER COMPLETE (preset {preset}) -- power cycle AVR to apply")
     print("="*50)
     print(f"\nTo switch presets on AVR:")
-    print(f"  Telnet port 23: ZM?  (cycles through Audyssey presets)")
+    print(f"  Telnet port 23: ZM?  (cycles through Audyssey slots)")
 
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
+# ─── entry point ──────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description='Transfer OCA calibration to AVR')
     parser.add_argument('oca_file', help='Path to .oca calibration file')
     parser.add_argument('avr_ip', nargs='?', default='192.168.50.2', help='AVR IP address')
-    parser.add_argument('--preset', choices=['A', 'B'], default='A',
-                        help='Target preset slot (default: A)')
+    parser.add_argument('--preset', '--slot', '-s', choices=['1', '2'], default='1',
+                        help='Target preset: 1 or 2 (default: 1)')
     args = parser.parse_args()
 
     oca_path = Path(args.oca_file)
