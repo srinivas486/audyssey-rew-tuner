@@ -195,12 +195,23 @@ def transfer(oca_path: Path, ip: str, preset: str = 'A'):
               f" | trim={ch['trimAdjustmentInDbs']}dB | dist={ch['distanceInMeters']}m")
 
     # Try to find matching pcap for config
-    pcap_path = oca_path.with_suffix('.pcapng')
-    if not pcap_path.exists():
-        # Try with same timestamp pattern as known files
-        pcap_path = None
+    # Look for pcap with same embedded timestamp as OCA file
+    # OCA filename format: A1EvoAcoustiX_<date>_<time>_<timestamp>..oca
+    pcap_path = None
+    stem = oca_path.stem.rstrip('.').split('..')[0]  # 'A1EvoAcoustiX_Apr24_1844_1777065760128'
+    timestamp = None
+    for part in stem.split('_'):
+        if part.isdigit() and len(part) >= 10:
+            timestamp = part
+            break
+    if timestamp:
         for sibling in oca_path.parent.iterdir():
-            if sibling.suffix == '.pcapng' and sibling.stem.startswith(oca_path.stem.split('_')[0]):
+            if sibling.suffix == '.pcapng' and timestamp in sibling.name:
+                pcap_path = sibling
+                break
+    else:
+        for sibling in oca_path.parent.iterdir():
+            if sibling.suffix == '.pcapng':
                 pcap_path = sibling
                 break
 
