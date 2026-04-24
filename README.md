@@ -89,3 +89,15 @@ After running `oca_transfer.py` and power cycling the X3800H:
 - [ ] Build config from OCA when no pcap available (fallback mode)
 - [ ] Echo Console tab for one-click transfer
 - [ ] .eqx generation from REW measurements
+## Usage Examples
+
+```bash
+# Transfer to preset 1 (default)
+python3 oca_transfer.py calibration.oca
+
+# Transfer to preset 2
+python3 oca_transfer.py calibration.oca --preset 2
+
+# With specific IP
+python3 oca_transfer.py my_oca.oca 192.168.50.2 --preset 1
+```
