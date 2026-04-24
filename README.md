@@ -1,14 +1,26 @@
 # Audyssey REW Tuner — A1 Evo AcoustiX Transfer Tools
 
-Tools for reverse-engineering and transferring Audyssey calibrations to Denon/Marantz AVRs via the binary protocol.
+Tools for reverse-engineering and transferring Audyssey calibrations to Denon/Marantz AVRs via the binary protocol. Supports full OCA calibrations and individual PEQ filters from REW.
 
 ## What's Working ✅
 
-**Full OCA calibration transfer to AVR (verified April 24, 2026):**
+**Full OCA calibration transfer** (verified Apr 24, 2026):
 ```bash
 python3 oca_transfer.py 192.168.50.2
 ```
-This transfers all 11 channels, 16321 filter coefficients per channel, using the confirmed binary protocol on port 1256.
+
+**REW PEQ → AVR transfer** (verified Apr 24, 2026):
+```bash
+python3 rew_to_audyssey.py --test            # test with sample data
+python3 rew_to_audyssey.py --auto            # from REW API
+python3 rew_to_audyssey.py --file filters.json  # from JSON
+python3 rew_to_audyssey.py --eqx demo.eqx     # from .eqx calibration file
+```
+
+**Export REW PEQ to .eqx:**
+```bash
+python3 rew_to_audyssey.py --auto --save-eqx calibration.eqx
+```
 
 ## File Inventory
 
@@ -16,8 +28,8 @@ This transfers all 11 channels, 16321 filter coefficients per channel, using the
 | File | Purpose |
 |------|---------|
 | `oca_transfer.py` | **Main transfer script** — sends full OCA calibration via binary protocol |
-| `rew_to_audyssey.py` | REW PEQ → AVR transfer via ASCII Telnet commands |
-| `avr_proto_*.py` | Development history — protocol experiments |
+| `rew_to_audyssey.py` | **REW PEQ → AVR** — converts PEQ filters to biquad coefficients and transfers |
+| `rew_to_audyssey.py --eqx` | **Future-ready** — loads/saves `.eqx` calibration files |
 
 ### Data Files
 | File | Purpose |
@@ -62,25 +74,54 @@ After running `oca_transfer.py` and power cycling the X3800H:
 - SW1: -0.5dB, 2.81m ✓
 - SW2: -2.5dB, 2.82m ✓
 
-## Usage
+## Future: .eqx Calibration Format
 
-### Full OCA Transfer
-```bash
-# Connect AVR (port 1256) and transfer full calibration
-python3 oca_transfer.py [AVR_IP]
+**.eqx** is the planned open calibration format for this project — designed for extensibility, future room measurement sources, and full interoperability with REW and other measurement tools.
 
-# Defaults to 192.168.50.2 if no IP given
-python3 oca_transfer.py
+### Design Goals
+- Support room measurements from any source (REW, ARTA, REW beta, etc.)
+- Store full EQ data independent of any AVR-specific binary format
+- Easy to generate from room measurement files (REW txt, CSV, etc.)
+- Convertible to OCA for Denon/Marantz transfer, or direct binary for other AVRs
+
+### .eqx Format (v1.0 draft)
+```json
+{
+  "version": "1.0",
+  "appVersion": "3.0",
+  "createdAt": "2026-04-24T18:44:00.000Z",
+  "model": "AVR-X3800H",
+  "eqType": 2,
+  "channels": [{
+    "channel": 0,
+    "channelName": "FL",
+    "distanceInMeters": 2.75,
+    "trimAdjustmentInDbs": -0.5,
+    "peq": [
+      { "freq": 63, "gain": -2.5, "Q": 1.2, "type": "PEQ" },
+      { "freq": 125, "gain": 1.5, "Q": 1.4, "type": "PEQ" }
+    ],
+    "filter": [ /* raw IIR coefficients */ ],
+    "sr": 48000
+  }],
+  "subwoofer": {
+    "distanceInMeters": 2.81,
+    "trimAdjustmentInDbs": -5.0
+  }
+}
 ```
 
-### REW Integration
-```bash
-# Test with REW API
-python3 rew_to_audyssey.py --auto
-```
+### Planned .eqx Features
+- [ ] Parse REW measurement exports (txt, csv)
+- [ ] Generate .eqx from room measurement data
+- [ ] Convert .eqx → OCA (Denon/Marantz)
+- [ ] Convert .eqx → direct binary (other AVR brands)
+- [ ] Target curve integration
+- [ ] Multi-sub optimization support
 
 ## Next Steps
 - [ ] Add SR codes beyond 0/52/57 (96kHz = 184)
 - [ ] Implement binary SET_SETDAT builder (currently using pcap bytes)
 - [ ] Echo Console tab for one-click transfer
+- [ ] .eqx generation from REW measurement files
 - [ ] Support for other AVR models (currently tested on X3800H)

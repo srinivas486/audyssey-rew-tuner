@@ -241,3 +241,70 @@ Use the existing `index.html` (browser SPA in this workspace) as the base:
 
 ## License Note
 This spec is for **personal use only** per the binary's EULA. The author (OCA) has confirmed decompilation for personal use is acceptable.
+
+---
+
+## Future: .eqx Calibration Format
+
+**.eqx** is the project's open calibration format — a clean, extensible JSON format designed to hold EQ data from any measurement source, independently of any AVR-specific binary protocol.
+
+### Design Rationale
+- OCA is tied to the A1 Evo/AcoustiX ecosystem — useful but opaque
+- .eqx is AVR-agnostic — convert to OCA for Denon, or to other formats for other AVR brands
+- Future-proof: generated from room measurements (REW, ARTA, etc.), not just from A1 Evo
+
+### .eqx Format (v1.0)
+```json
+{
+  "version": "1.0",
+  "appVersion": "3.0",
+  "createdAt": "2026-04-24T18:44:00.000Z",
+  "model": "AVR-X3800H",
+  "eqType": 2,
+  "avr": { "host": "192.168.50.2", "EQType": "MultEQXT32", "CVVer": "00.01" },
+  "channels": [{
+    "channel": 0,
+    "channelName": "FL",
+    "distanceInMeters": 2.75,
+    "trimAdjustmentInDbs": -0.5,
+    "peq": [
+      { "freq": 63, "gain": -2.5, "Q": 1.2, "type": "PEQ", "sr": 48000 },
+      { "freq": 125, "gain": 1.5, "Q": 1.4, "type": "PEQ", "sr": 48000 }
+    ],
+    "filter": [ /* raw IIR biquad coefficients — optional */ ],
+    "sr": 48000
+  }],
+  "subwoofer": {
+    "distanceInMeters": 2.81,
+    "trimAdjustmentInDbs": -5.0,
+    "xoverFreq": 80,
+    "peq": []
+  },
+  "targetCurve": "acoustix.txt"
+}
+```
+
+### Field Reference
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | string | Format version (always "1.0" for now) |
+| `appVersion` | string | Creating app version |
+| `createdAt` | ISO 8601 | Timestamp |
+| `model` | string | Target AVR model |
+| `eqType` | int | 1=MultEQ, 2=MultEQ-X, 3=MultEQ-XT32 |
+| `channels[].channel` | int | Channel index (0-10) |
+| `channels[].channelName` | string | Channel name (FL/C/FR/etc.) |
+| `channels[].distanceInMeters` | float | Speaker distance |
+| `channels[].trimAdjustmentInDbs` | float | Trim in dB |
+| `channels[].peq` | array | PEQ filters (freq/gain/Q/type/sr) |
+| `channels[].filter` | array | Raw IIR coefficients (optional) |
+| `channels[].sr` | int | Sample rate (default 48000) |
+| `subwoofer` | object | Subwoofer-specific settings |
+| `targetCurve` | string | Target curve filename |
+
+### Planned Converters
+- [ ] `.eqx` → `.oca` (Denon/Marantz via binary protocol port 1256)
+- [ ] `.eqx` → ASCII Telnet commands (PEQ via port 23)
+- [ ] REW txt/csv measurement → `.eqx`
+- [ ] `.eqx` → generic JSON for other AVR brands (Pioneer, Yamaha, etc.)
