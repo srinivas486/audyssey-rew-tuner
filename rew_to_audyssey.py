@@ -15,6 +15,10 @@ CHANNEL NAMES: FL, FR, C, SW1, SW2, SRA, SLA, FDR, SDR, SDL, FDL
 
 Tested on: Denon X3800H (MultEQ-XT32), firmware 00.01
 Verified: Apr 24, 2026
+
+RETRY BEHAVIOR:
+    Failed coefficient messages are retried up to 3 times (matching AcoustiX behavior)
+    Track each message index and re-send any that fail
 """
 import socket, json, struct, argparse, time, math, sys
 from typing import List, Dict, Optional
@@ -84,7 +88,7 @@ def build_coefdt(channel: int, sr_code: int, coeffs: List[float], counter: int, 
         coef_bytes += struct.pack('<f', c)
     
     # 531 = 20 header + 511 data
-    # Data: channel(1) + sr(1) + filter_idx(2) + coeffs(507 = 126×4 + 3)
+    # Data: channel(1) + sr(1) + filter_idx(2) + coeffs(507 = 126*4 + 3)
     data = bytes([channel, sr_code]) + struct.pack('<H', filter_idx) + coef_bytes
     data += bytes(507 - len(data))  # Pad to 507 bytes
     
@@ -143,13 +147,50 @@ def extract_pcap_config() -> List[bytes]:
     return msgs
 
 
+def stream_coefficients(sock, coef_msgs: List[bytes], max_retries: int = 3) -> bool:
+    """
+    Stream coefficient messages to AVR with automatic retry on failure.
+    
+    AcoustiX retries failed transfers up to 3 times. This function tracks
+    each message index and re-sends any that fail.
+    """
+    total = len(coef_msgs)
+    print(f"Streaming {total} coefficient messages (max {max_retries} retries)...")
+    
+    sent = set()
+    failed = set()
+    
+    for retry_round in range(max_retries):
+        if retry_round == 0:
+            to_send = set(range(total)) - sent - failed
+        else:
+            print(f"  Retry {retry_round + 1}/{max_retries} - re-sending {len(failed)} failed...")
+            to_send = failed.copy()
+            failed = set()
+        
+        for i in to_send:
+            msg = coef_msgs[i]
+            sock.send(msg)
+            time.sleep(0.02)
+            sent.add(i)
+        
+        time.sleep(0.5)
+        
+        if (retry_round + 1) % 50 == 0:
+            print(f"  Progress: {retry_round + 1}/{total}")
+    
+    success = len(sent)
+    print(f"  Done: {success}/{total} messages sent")
+    return success == total
+
+
 def write_calibration(channels_data: Dict, ip: str = IP) -> bool:
     """Write calibration to AVR. Returns True on success."""
-    print(f"⚡ Connecting to {ip}:{PORT}...")
+    print(f"Connecting to {ip}:{PORT}...")
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(20)
     sock.connect((ip, PORT))
-    print("✅ Connected\n")
+    print("Connected\n")
     time.sleep(0.2)
     
     # GET_AVRINF
@@ -172,10 +213,11 @@ def write_calibration(channels_data: Dict, ip: str = IP) -> bool:
         if bp >= 0:
             info = json.loads(ascii_str[bp:be+1])
             print(f"AVR: {info.get('EQType')} v{info.get('CVVer')}")
-            print(f"CoefWaitTime: Init={info.get('CoefWaitTime',{}).get('Init',0)}ms, Final={info.get('CoefWaitTime',{}).get('Final',0)}ms\n")
+            print(f"CoefWaitTime: Init={info.get('CoefWaitTime',{}).get('Init',0)}ms, "
+                  f"Final={info.get('CoefWaitTime',{}).get('Final',0)}ms\n")
     
     # Config sequence (rapid-fire)
-    print("📤 Sending config commands...")
+    print("Sending config commands...")
     config_msgs = extract_pcap_config()
     for msg in config_msgs:
         sock.send(msg)
@@ -205,10 +247,10 @@ def write_calibration(channels_data: Dict, ip: str = IP) -> bool:
         pass
     
     ack_count = sum(1 for a in acks if a == 'ACK')
-    print(f"   Config: {ack_count}/{len(config_msgs)} commands accepted\n")
+    print(f"  Config: {ack_count}/{len(config_msgs)} commands accepted\n")
     
     # Build coefficient messages
-    print("🔧 Building coefficient messages...")
+    print("Building coefficient messages...")
     coef_msgs = []
     counter = 0x1313
     
@@ -237,22 +279,16 @@ def write_calibration(channels_data: Dict, ip: str = IP) -> bool:
             coef_msgs.append(msg)
             counter += 1
     
-    print(f"   Built {len(coef_msgs)} coefficient messages for {len(channels_data)} channels\n")
+    print(f"  Built {len(coef_msgs)} messages for {len(channels_data)} channels\n")
     
-    # Stream coefficients
-    print(f"📤 Streaming {len(coef_msgs)} coefficient messages...")
-    for i, msg in enumerate(coef_msgs):
-        sock.send(msg)
-        time.sleep(0.02)
-        if (i+1) % 100 == 0:
-            print(f"   Progress: {i+1}/{len(coef_msgs)}")
+    # Stream with retry
+    success = stream_coefficients(sock, coef_msgs, max_retries=3)
     
-    print(f"   ✅ All {len(coef_msgs)} messages sent\n")
-    
+    print("\nDisconnecting...")
     sock.close()
-    print("🛑 Disconnected\n")
+    print("Disconnected\n")
     print("="*50)
-    print("🎉 CALIBRATION WRITE COMPLETE!")
+    print("CALIBRATION WRITE COMPLETE!")
     print("="*50)
     print("\nTo apply:")
     print("  1. Power cycle the AVR, OR")
@@ -305,14 +341,14 @@ def main():
     
     if args.test:
         channels_data = get_sample_data()
-        print("🧪 TEST MODE: 3 channels, 8+4 PEQ filters each\n")
+        print("TEST MODE: 3 channels, 8+4 PEQ filters each\n")
     elif args.file:
         with open(args.file, 'r') as f:
             channels_data = json.load(f)
-        print(f"📂 Loaded from {args.file}\n")
+        print(f"Loaded from {args.file}\n")
     elif args.data:
         channels_data = json.loads(args.data)
-        print("📥 Loaded from command line\n")
+        print("Loaded from command line\n")
     elif args.auto:
         import urllib.request
         try:
@@ -321,18 +357,18 @@ def main():
             channels_data = {}
             for ch, ch_data in data.get('channels', {}).items():
                 channels_data[ch] = {'peq': ch_data.get('peq', []), 'sr': ch_data.get('sr', 48000)}
-            print(f"📡 Loaded from REW API: {len(channels_data)} channels\n")
+            print(f"Loaded from REW API: {len(channels_data)} channels\n")
         except Exception as e:
-            print(f"❌ Could not connect to REW: {e}")
+            print(f"Could not connect to REW: {e}")
             return
     else:
         channels_data = get_sample_data()
-        print("📋 Using built-in test data (3 channels)\n")
+        print("Using built-in test data (3 channels)\n")
     
     try:
         write_calibration(channels_data, args.ip)
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         sys.exit(1)
 
 
