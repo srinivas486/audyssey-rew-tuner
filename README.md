@@ -1,67 +1,86 @@
-# Audyssey REW Tuner
+# Audyssey REW Tuner — A1 Evo AcoustiX Transfer Tools
 
-A single-page HTML tool for tuning Denon Audyssey `.ady` files using Room EQ Wizard (REW).
+Tools for reverse-engineering and transferring Audyssey calibrations to Denon/Marantz AVRs via the binary protocol.
 
-## What's New in v2
+## What's Working ✅
 
-- **Canvas EQ Chart** — uPlot-powered log-frequency chart (20Hz–20kHz) showing Target vs Measured response in real time
-- **EQ Match Preview** — Per-channel accordion panels showing Measured, Target, and Corrected curves after EQ matching
-- **Multi-Position Measurement Wizard** — Track up to 3 measurement positions with a visual step indicator; prompts for spatial averaging when all positions are loaded
-- **Onboarding Progress Bar** — Sticky 6-step indicator auto-advances as you work (Connect REW → Load ADY → Target Curve → Import → EQ Match → Export)
-- **Settings Persistence** — All port, curve, EQ, and sub settings auto-saved to localStorage and restored on reload
-- **GSonic-Inspired UI** — Dark `#0a0a0f` palette with teal `#00d4aa` accents, smooth panel animations, focused-input glow, and gradient header divider
+**Full OCA calibration transfer to AVR (verified April 24, 2026):**
+```bash
+python3 oca_transfer.py 192.168.50.2
+```
+This transfers all 11 channels, 16321 filter coefficients per channel, using the confirmed binary protocol on port 1256.
 
-## What It Does
+## File Inventory
 
-1. **Parses** your Denon MultEQ Editor `.ady` file — extracts channel measurements, distances, trims, delays, and polarity
-2. **Imports** impulse responses into REW via its REST API
-3. **Generates** corrective PEQ filters matched to a target curve of your choice
-4. **Previews** correction results per-channel with an interactive chart
-5. **Exports** a tuned `.ady` file ready to load back into the Denon MultEQ Editor app and send to your AVR
+### Transfer Scripts
+| File | Purpose |
+|------|---------|
+| `oca_transfer.py` | **Main transfer script** — sends full OCA calibration via binary protocol |
+| `rew_to_audyssey.py` | REW PEQ → AVR transfer via ASCII Telnet commands |
+| `avr_proto_*.py` | Development history — protocol experiments |
 
-## Target Hardware
+### Data Files
+| File | Purpose |
+|------|---------|
+| `A1EvoAcoustiX_Apr24_1844_1777065760128..oca` | Latest OCA calibration (Apr24 18:44 run) |
+| `acoustix_transfer_1777065760128..pcapng` | pcap of Apr24 transfer (verified correct SW trim) |
+| `A1EvoAcoustiX_Apr24_1844_1777066154375..html` | OCA log HTML from Apr24 run |
 
-- **AVR:** Denon X3800H (MultEQ-X, up to 20 PEQ bands per channel)
-- **Software:** REW (Room EQ Wizard) v5.30+ with API mode enabled
+### Documentation
+| File | Purpose |
+|------|---------|
+| `SPEC.md` | Full protocol spec — binary format, command reference, confirmed encoding |
+| `IMPLEMENTATION_PLAN.md` | Plan for Echo Console A1 Evo tab integration |
+| `docs/` | Additional notes and research |
 
-## Requirements
+## Transfer Protocol — Confirmed Details
 
-- REW running on the same machine with API server enabled
-  - REW → Preferences → API → Enable API Server (default port: 4735)
-- A modern browser (Chrome, Firefox, Edge) — open `index.html` directly from disk (`file://`)
-- A `.ady` file exported from the Denon MultEQ Editor app
+### Port 1256 — Binary TCP
+| Message | Purpose |
+|---------|---------|
+| `GET_AVRINF` | Query AVR capabilities |
+| `SET_SETDAT` | Set distances, trims, crossovers |
+| `SET_COEFDT` | Set filter coefficients (126 × LE float32 per message) |
+
+**Key finding (April 24, 2026):**
+- Coefficient offset: TCP payload **offset 22** (not 24)
+- Coefficient encoding: **little-endian** IEEE 754 float32 (not big-endian)
+- Meta field: always `02 00 01 00` for coefficient messages
+
+### Port 23 — Telnet (ASCII)
+| Command | Purpose |
+|---------|---------|
+| `MSSV<ch>=<freq>Hz,<gain>dB,Q=<q>` | Set PEQ filter |
+| `MSD<ch><distance_mm>` | Set distance |
+| `MST<ch><trim_x10>` | Set trim |
+| `ZM?AUDYON` | Apply calibration |
+
+## Verified Results (Apr 24, 2026)
+
+After running `oca_transfer.py` and power cycling the X3800H:
+- FL: -0.5dB, 2.75m ✓
+- SW1: -0.5dB, 2.81m ✓
+- SW2: -2.5dB, 2.82m ✓
 
 ## Usage
 
-1. Open `index.html` in your browser
-2. Start REW and enable the API server
-3. Click **Test Connection** — confirm green status
-4. Drag-and-drop your `.ady` file (or use Browse)
-5. Select your target curve preset and adjust shelf controls
-6. Click **Import to REW**
-7. Click **Run EQ Matching**
-8. Click **Export Tuned ADY** — download your tuned file
-9. Open the tuned `.ady` in Denon MultEQ Editor and send to the X3800H
+### Full OCA Transfer
+```bash
+# Connect AVR (port 1256) and transfer full calibration
+python3 oca_transfer.py [AVR_IP]
 
-## Target Curve Presets
+# Defaults to 192.168.50.2 if no IP given
+python3 oca_transfer.py
+```
 
-| Preset | Description |
-|---|---|
-| Flat | Pure reference — 0 dB everywhere |
-| Harman Home | +6 dB shelf below 100 Hz, gentle roll-off above 2 kHz |
-| House Curve −0.5/oct | Subtle warmth — −0.5 dB/octave from 1 kHz |
-| House Curve −1.0/oct | Warmer/darker — −1.0 dB/octave from 1 kHz |
-| X-Curve | Cinema standard — −3 dB/octave above 2 kHz |
-| Custom CSV | Upload your own `frequency,dB` CSV |
+### REW Integration
+```bash
+# Test with REW API
+python3 rew_to_audyssey.py --auto
+```
 
-## No Build Step
-
-This tool is a single `index.html` — no npm, no bundler, no server. Open it directly in a browser.
-
-## License
-
-MIT
-
-## Credits
-
-Inspired by [A1Evo MJ Custom](https://github.com/navid0308/A1Evo_MJ_Custom) by navid0308.
+## Next Steps
+- [ ] Add SR codes beyond 0/52/57 (96kHz = 184)
+- [ ] Implement binary SET_SETDAT builder (currently using pcap bytes)
+- [ ] Echo Console tab for one-click transfer
+- [ ] Support for other AVR models (currently tested on X3800H)

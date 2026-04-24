@@ -1,5 +1,8 @@
 # A1 Evo AcoustiX — Reverse Engineering Spec
 
+> **Status:** ✅ Transfer protocol fully reverse-engineered and verified working  
+> **Last updated:** 2026-04-24
+
 ## Binary Information
 - **File**: `a1-evo-acoustix-linux-x64_1776918721890.` (61.7 MB)
 - **Type**: pkg-compiled Node.js v18 executable
@@ -15,244 +18,226 @@ a1-evo-acoustix/
 ├── main.js                          # Entry point
 ├── main.module.js                   # Main module
 ├── package.json                     # name: a1-evo-acoustix, version: 3.0
-├── main.js
 ├── transfer_module.js              # ⚡ FILTER TRANSFER ENGINE
 ├── alignmentEngine.js              # Room/speaker alignment
-├── impulse_response_calculator.js   # IR processing
-├── ir_timing.js                    # Timing calculations  
+├── impulse_response_calculator.js # IR processing
+├── ir_timing.js                    # Timing calculations
 ├── measurement_module.js           # REW measurement integration
 ├── shared_utils.js                 # Shared utilities
 ├── subLeveling/src/
 │   ├── avrClient.js                # ⚡ AVR TELNET CLIENT
-│   ├── deviceController.js        # Device control
+│   ├── deviceController.js         # Device control
 │   ├── channelMap.js              # Channel mapping
-│   └── subwooferLeveling.js       # Subwoofer level/crossover
-├── A1EvoAcoustiX.html             # Embedded TUI web interface
+│   └── subwooferLeveling.js        # Subwoofer level/crossover
+├── A1EvoAcoustiX.html              # Embedded TUI web interface
 ├── A1EvoCustom.html               # Custom HTML variant
-├── receiver_config.avr            # Saved AVR config
+├── receiver_config.avr             # Saved AVR config
 ├── target_curves/                  # Target curves *.txt
 └── tr-curves/                      # Target reference curves *.txt
 ```
 
-## Architecture
+---
 
-### AVR Discovery — SSDP (UDP Multicast)
-- **Address**: `239.255.255.250:1900`
-- **ST Header**: `urn:schemas-denon-com:device:ACT-DenonDeviceService:1`
-- **Implemented by**: `UPNPDiscovery` class → `getAvrInfoAndStatusForConfig`
+## Transfer Protocol — CONFIRMED ✅
 
-### AVR Communication — Raw Telnet (Port 23)
-- **Functions**: `sendTelnetCommands`, `_connectToAVR`, `AvrClient`
-- **Control port**: 23 (Telnet, raw TCP)
-- **Commands**: `MSSV`, `MSD`, `MST`, `MSQ` + zone commands `ZEM`, `ZEO`, `ZEA`, etc.
+The filter transfer uses a **binary TCP protocol on port 1256** (not Telnet port 23).
 
-### REW Integration (HTTP REST API — Port 4735)
-- **Base URL**: `http://127.0.0.1:4735/`
-- **Endpoints used**:
-  - `POST /eq/import-impulse` — Import IR data (base64 Big-Endian IEEE 754 float32)
-  - `POST /eq/filter` — Configure filter tasks
-  - `POST /eq/match-target` — Match target curve
-  - `GET /measurements/curve` — Get resulting curve data
-  - `GET /eq/house-curve` — House curve
-  - `POST /eq/export-raw` — Export filter coefficients
-- **IR Format**: base64-encoded Big-Endian IEEE 754 float32, `sampleRate: 48000`
+### Verified Message Types
 
-### Filter Transfer Protocol — Binary over Telnet
-The binary protocol uses `sendSetDatCommand` → `buildPacketConfig` → `channelByteTable` mapping.
+#### 1. SET_SETDAT — Configuration (distances, trims, crossovers)
+```
+54 xx xx xx 08 53 45 54 5f 53 45 54 44 41 54 00 [[4 bytes meta]] [[channel]] [[SR]]
+[[...config data...]]
+```
+- **Marker:** `0x54` (ASCII 'T')
+- **Counter:** 3 bytes little-endian
+- **Flag:** `0x08`
+- **Command:** `SET_SETDAT` (10 bytes, padded with null)
+- **Meta:** 4 bytes (purpose unknown, varies per message)
+- **Channel:** 1 byte
+- **SR:** 1 byte (sample rate code)
+- **Config data:** variable
 
-**Key functions** (in order of call):
-1. `validateConfigurationAndPrompt`
-2. `prepareParamsInOrder`
-3. `sendSetDatCommand`
-4. `processFilterDataForTransfer`
-5. `generatePacketsForTransfer`
-6. `buildPacketConfig` → `buildAvrPacket` → `hexWithChecksum`
-7. `finalizeTransfer`
-8. `sendCoeffsForAllSampleRates`
+#### 2. SET_COEFDT — Filter Coefficients (biquad IIR coefficients)
+```
+54 xx xx xx 08 53 45 54 5f 43 4f 45 46 44 54 00 [[4 bytes meta]] [[channel]] [[SR]]
+[[126 × float32 coefficients...]]
+```
+- **Length:** 531 bytes (fixed)
+- **Coefficients:** 126 × float32 (LE), starting at TCP offset 22
+- **Coefficient encoding:** IEEE 754 float32, **little-endian**
+- **Coefficient offset:** TCP payload offset **22** (not 24)
 
-**Binary format** (deduced from function names and string table):
-- `hexWithChecksum` — builds AVR command packets
-- `channelByteTable` — maps channels to type bytes (FL/FR/C/etc.)
-- `getChannelTypeByte` — gets byte value for channel type
-- `javaFloatToFixed32bits` / `floatToBufferLE` — converts floats to fixed 32-bit LE
-- `fixed32IntToBufferLE` — writes integers to buffer little-endian
+### TCP Payload Structure (531 bytes total)
+```
+Byte 0:     0x54 (marker 'T')
+Bytes 1-3: counter (3 bytes LE)
+Byte 4:     0x08 (data transfer flag)
+Bytes 5-14: 'SET_COEFDT' (10 bytes)
+Byte 15:    0x00 (null padding)
+Bytes 16-19: meta field (4 bytes, always 02 00 01 00 for ch0 sr0)
+Byte 20:    channel number (0-10)
+Byte 21:    SR code (0=32kHz, 52=44.1kHz, 57=48kHz)
+Bytes 22-525: 126 float32 coefficients × 4 bytes (LE float32)
+```
 
-**Key constants**:
-- `AVR_CONTROL_PORT` — port 23 (Telnet)
-- `MEASUREMENT_CHANNEL_ORDER_FIXEDA` — channel ordering constant
-- `HEIGHT_SPEAKERS` — height speaker config
-- `hasHeightSpeakers` — detection flag
+### SR Code Mapping
+| SR Code | Sample Rate |
+|---------|------------|
+| 0       | 32 kHz     |
+| 52      | 44.1 kHz   |
+| 57      | 48 kHz     |
+| 184     | 96 kHz     |
 
-## Telnet Command Protocol (Denon/Marantz)
+### Channel Number Mapping
+| Ch | Name | Notes |
+|----|------|-------|
+| 0  | FL   | Front Left |
+| 1  | C    | Center |
+| 2  | FR   | Front Right |
+| 3  | SBR  | Surround Back Right |
+| 4  | SBL  | Surround Back Left |
+| 5  | FHL  | Front Height Left |
+| 6  | FHR  | Front Height Right |
+| 7  | SW1  | Subwoofer 1 |
+| 8  | SW2  | Subwoofer 2 |
+| 9  | FDL  | Front Dolby Left |
+| 10 | FDR  | Front Dolby Right |
 
-### Commands (from string table analysis):
+### Coefficient Encoding — CONFIRMED ✅
+- **Byte order:** Little-endian IEEE 754 float32
+- **Offset:** TCP payload offset 22 (not 24)
+- **Verification:** OCA filter[0] LE bytes found at TCP offset 22 of retransmitted blocks in pcap
+  - OLD run: `9cd1fd3e` → 0.495740 (matches OCA FL filter[0])
+  - NEW run: `465e023f` → 0.509251 (matches OCA FL filter[0])
+
+### Counter Field
+- 3 bytes, little-endian
+- Base: `0x1300` (79488)
+- Increment: `(msg_idx << 8) + channel_idx`
+- Example: ch0 msg0 = 0x1300, ch1 msg0 = 0x1301, ch0 msg1 = 0x1400
+
+---
+
+## AVR Communication — Two Ports
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 23   | Telnet (ASCII) | Interactive control, status queries, Audyssey on/off |
+| 1256 | Raw TCP (binary) | Filter coefficient transfer, configuration |
+
+### Telnet Commands (Port 23)
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `MSSV<ch>=<freq>Hz,<gain>dB,Q=<q>` | Set PEQ filter | `MSSVFL=63Hz,-3.5dB,Q=1.2` |
+| `MSD<ch><distance_mm>` | Set distance (mm) | `MSDFL3000` |
+| `MST<ch><trim_x10>` | Set trim (0.1 dB) | `MSTFL105` = +10.5 dB |
+| `ZM?AUDYON` | Apply calibration | - |
+| `MSSV?<ch>` | Query filter | - |
+
+### Binary Protocol Commands (Port 1256)
 | Command | Purpose |
 |---------|---------|
-| `MSSV<ch>=<freq>Hz,<gain>dB,Q=<q>` | Set PEQ filter |
-| `MSD<ch><distance_mm>` | Set distance (in mm) |
-| `MST<ch><trim_x10>` | Set trim (in 0.1 dB) |
-| `MSQ<ch><filter_num>` | Query filter |
-| `MFGA` | Group A config |
-| `MNGT` | Management |
-| `PWST` | Power status |
-| `CV`, `PV`, `PS`, `SM`, `SI` | Volume/display modes |
+| `GET_AVRINF` | Get AVR info (EQType, CVVer, CoefWaitTime) |
+| `SET_SETDAT` | Set configuration (distances, trims, crossovers) |
+| `SET_COEFDT` | Set filter coefficients (biquad IIR) |
 
-### Zone Commands:
-| Command | Purpose |
-|---------|---------|
-| `ZEM` | Zone enter mode |
-| `ZEO` | Zone enter on |
-| `ZEA` | Zone enter all |
-
-### Channels (from channel map):
-`FL`, `FR`, `C`, `SW` (subwoofer), `SL`, `SR`, `BL`, `BR`, `SBL`, `SBR`  
-Plus height channels when `hasHeightSpeakers` is true.
-
-## Express API Server (Port 3000)
-
-Embedded HTTP server for the browser UI. Endpoints:
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/get-app-path` | Get app base path |
-| `GET /api/get-curve-data` | Get measurement curve |
-| `GET /api/get-mic-calibration` | Get mic calibration data |
-| `GET /api/get-target-curves` | Get target curves |
-| `GET /api/get-tr-curve-data` | Get target reference curve |
-| `POST /api/set-house-curve` | Set house curve in REW |
-| `POST /api/align` | Run alignment |
-| `POST /api/find-sub-ir-start` | Find subwoofer IR start |
-| `POST /api/calculate-shift` | Calculate IR shift |
-| `POST /api/save-oca` | Save .oca calibration |
+---
 
 ## File Formats
 
-### .ady — Denon MultEQ Editor Export
-JSON format from Denon "MultEQ Editor" app:
-```json
-{
-  "detectedChannels": [{
-    "channelName": "FL",
-    "responseData": [/* frequency response array */],
-    "peqFilters": [/* PEQ filter definitions */]
-  }],
-  "channelReport": {/* channel measurement report */},
-  "micCalibration": {/* microphone calibration data */}
-}
-```
-
 ### .oca — A1 Evo Calibration Format
-JSON format specific to A1 Evo:
 ```json
 {
   "version": "1.0",
   "appVersion": "3.0",
-  "createdAt": "<ISO timestamp>",
-  "avr": {/* AVR info */},
-  "channels": [/* per-channel filter data */],
-  "subwoofer": {/* subwoofer config */},
-  "targetCurve": {/* target curve */},
-  "ocaData": {/* full calibration data */}
+  "createdAt": "2026-04-24T18:44:00.000Z",
+  "model": "AVR-X3800H",
+  "eqType": 2,
+  "avr": { "host": "192.168.50.2", "EQType": "MultEQXT32", "CVVer": "00.01" },
+  "channels": [{
+    "channel": 0,
+    "channelName": "FL",
+    "distanceInMeters": 2.75,
+    "trimAdjustmentInDbs": -0.5,
+    "filter": [0.509251, -0.000547, -0.000547, ...]  // 16321 float32 BE values
+  }],
+  "subwoofer": { "distanceInMeters": 2.81, "trimAdjustmentInDbs": -5.0 },
+  "targetCurve": "acoustix.txt"
+}
+```
+- Coefficients stored as big-endian IEEE 754 float32 in JSON
+- Convert to little-endian for SET_COEFDT transfer
+
+### .ady — Denon MultEQ Editor Export
+```json
+{
+  "detectedChannels": [{
+    "channelName": "FL",
+    "responseData": [[freq, dB], ...],
+    "peqFilters": [{ "freq": 63, "gain": -3.5, "Q": 1.2, "type": "PEQ" }]
+  }]
 }
 ```
 
+---
+
 ## Key Implementation Details
 
-### Transfer Module (`transfer_module.js`)
-The transfer module handles the full filter transfer workflow:
-- Sends filter coefficients in multiple sample rates
-- Uses binary packet format with channel-byte mapping
-- Implements retry logic (`sendWithRetries`)
-- Reports progress via `TransferProgress` interface
-
-### Telnet Client (`subLeveling/src/avrClient.js`)
-- Raw TCP socket connection to AVR port 23
-- `hexWithChecksum` command building
-- `commandTimeout` for timeout handling
-- `commandTimer` for timing
-- Response parsing via `_sendRawAndParseJsonHelper_Robust`
-
-### Binary Protocol Flow
+### Transfer Workflow
 ```
-User Input → validateConfigurationAndPrompt
-  → prepareParamsInOrder (sort channels)
-  → sendSetDatCommand
-    → processFilterDataForTransfer
-      → generatePacketsForTransfer
-        → buildPacketConfig (per packet)
-          → buildAvrPacket (per channel)
-            → getChannelTypeByte (from channelByteTable)
-            → javaFloatToFixed32bits (coefficient encoding)
-            → hexWithChecksum (packet framing + checksum)
-    → socket.write(packet)
-  → finalizeTransfer
-  → sendCoeffsForAllSampleRates (multi-rate transfer)
+1. Connect to port 1256
+2. GET_AVRINF → read CoefWaitTime (e.g., 15000 = 15s)
+3. Send SET_SETDAT config messages (6 messages for full config)
+4. Wait CoefWaitTime ms
+5. Receive ACKs for config
+6. Send SET_COEFDT coefficient messages (126 coefs per msg, all SRs)
+7. Done — power cycle AVR or ZM?AUDYON to apply
 ```
+
+### Biquad IIR Coefficients
+The 126 coefficients per SET_COEFDT message represent **IIR biquad filter stages**:
+- 126 coefficients = 21 biquad sections × 6 coefficients each, OR
+- 42 PEQ filters × 3 coefficients (typical for Audyssey)
+
+Each filter stage [b0, b1, b2, a1, a2] with a0=1 normalized.
+Coefficients are transmitted as raw IIR coefficients, not PEQ parameters.
+
+### CoefWaitTime
+From `GET_AVRINF` response:
+```json
+{ "CoefWaitTime": { "Init": 0, "Final": 15000 } }
+```
+- `Final` = time to wait after sending all coefficients before applying
+- For X3800H: 15000 ms (15 seconds)
+
+---
 
 ## Rebuild Strategy
 
-Since the binary is pkg-compiled and the source cannot be legally reproduced identically:
-
 ### Option A: Clean-room reimplementation (RECOMMENDED)
 Use the existing `index.html` (browser SPA in this workspace) as the base:
-1. Add Telnet AVR client using raw TCP sockets (Node.js `net` module)
-2. Implement the `MSxxxx` command protocol documented above
+1. Add binary TCP client for port 1256 (Node.js `net` module)
+2. Implement the binary protocol parsers from this spec
 3. Add `.oca` save/load for calibration storage
-4. Integrate REW API calls (already have this part)
-5. Add SSDP discovery for AVR detection
+4. Add SSDP discovery for AVR detection
+5. Integrate REW API calls for measurement/EQ matching
 
 ### Key missing pieces in existing `index.html`:
-- **Telnet client** — no AVR upload capability currently
+- **Binary TCP client** — no filter transfer capability
 - **SSDP discovery** — AVR auto-discovery
 - **Binary packet builder** — for filter transfer
 - **`.oca` format support** — calibration file save/load
 
 ### Implementation order:
-1. Telnet client (simple `net.connect` to port 23)
-2. SSDP discovery (simple UDP multicast)
-3. Command builders for MSSV/MSD/MST
-4. REW API integration improvements
-5. Calibration save/load (.oca format)
+1. Binary TCP client (simple `net.connect` to port 1256)
+2. Binary protocol parsers (SET_SETDAT, SET_COEFDT builders)
+3. SSDP discovery (simple UDP multicast)
+4. Command builders for MSSV/MSD/MST (Telnet port 23)
+5. REW API integration improvements
+6. Calibration save/load (.oca format)
 
-## Data Structures
-
-### ChannelByteTable (from binary string table)
-Maps channel names to type bytes for the binary protocol:
-- `FL` → 0x01 (or similar)
-- `FR` → 0x02
-- `C` → 0x03
-- `SW` → 0x04
-- etc.
-
-### TransferProgress Interface
-```typescript
-interface TransferProgress {
-  totalChannels: number;
-  totalCurves: number;
-  totalSampleRates: number;
-  totalOps: number;
-  completedOps: number;
-  currentChannel: number;
-  currentCurve: number;
-  currentSR: number;
-  currentPkt: number;
-  totalPkts: number;
-  coefficients: Float32Array;
-  phase: string;
-  startTime: number;
-  phaseStartTime: number;
-  totalPacketsSent: number;
-  statusMsg: string;
-}
-```
-
-## Known Constants
-- `SERVER_PORT`: 3000
-- `AVR_CONTROL_PORT`: 23 (Telnet)
-- `REW_API_PORT`: 4735
-- `commandTimeout`: ~5000ms
-- `bufferLimitBytes`: 4096
-- Sample rate labels (`SR_LABELS`): 48kHz, 96kHz, etc.
+---
 
 ## License Note
 This spec is for **personal use only** per the binary's EULA. The author (OCA) has confirmed decompilation for personal use is acceptable.
