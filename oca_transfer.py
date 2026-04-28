@@ -84,6 +84,72 @@ CHANNEL_BYTE_TABLE = {
     'LFE': {'eq2': 0x0d, 'neq2': 0x0d, 'griffin': 0x0d},  # LFE maps to SW1
 }
 
+# ─── Utility Functions (needed for FILTER_CONFIGS) ──────────────────────────
+
+def decompose_filter(filter_taps: List[float], M: int) -> List[List[float]]:
+    """Decompose a filter into M polyphase components."""
+    L = len(filter_taps)
+    if M <= 0 or L == 0:
+        return [[] for _ in range(M or 0)]
+    phases = [[] for _ in range(M)]
+    for p in range(M):
+        i = 0
+        while True:
+            n = i * M + p
+            if n >= L:
+                break
+            phases[p].append(filter_taps[n])
+            i += 1
+    return phases
+
+
+def generate_window(length: int, window_type: int = 1) -> List[float]:
+    """Generate a window function."""
+    c1 = [0.5]
+    c2 = [0.5]
+    c3 = [0.0]
+    type_index = window_type - 1
+    a = c1[type_index] if 0 <= type_index < len(c1) else 0.5
+    b = c2[type_index] if 0 <= type_index < len(c2) else 0.5
+    c = c3[type_index] if 0 <= type_index < len(c3) else 0.0
+    if length <= 0:
+        return []
+    window = [0.0] * length
+    factor = 1.0 / (length - 1 if length > 1 else 1)
+    pi2 = 2 * 3.14159265359
+    pi4 = 4 * 3.14159265359
+    for i in range(length):
+        t = i * factor
+        cos2pit = math.cos(pi2 * t)
+        cos4pit = math.cos(pi4 * t)
+        window[i] = a - b * cos2pit + c * cos4pit
+    return window
+
+
+def polyphase_decimate(signal: List[float], phases: List[List[float]], M: int, original_filter_length: int) -> List[float]:
+    """Perform polyphase decimation."""
+    signal_len = len(signal)
+    L = original_filter_length
+    if signal_len == 0 or L == 0 or M <= 0 or len(phases) != M:
+        return []
+    convolved_length = signal_len + L - 1
+    output_len = (convolved_length + M - 1) // M
+    if output_len <= 0:
+        return []
+    output = [0.0] * output_len
+    for k in range(output_len):
+        y_k = 0.0
+        for p in range(M):
+            current_phase = phases[p]
+            phase_len = len(current_phase)
+            for i in range(phase_len):
+                in_index = k * M + p - i * M
+                if 0 <= in_index < signal_len:
+                    y_k += current_phase[i] * signal[in_index]
+        output[k] = y_k
+    return output
+
+
 # ─── XT32 Decimation Filter Coefficients ─────────────────────────────────────
 
 DECIMATION_FACTOR = 4
@@ -832,6 +898,216 @@ def switch_preset(ip: str, preset: str):
             break
     print(f"Switched to preset {preset}")
     sock.close()
+
+
+# ─── Telnet Command Helpers (shared low-level primitive) ─────────────────────
+
+def _telnet_send_command(ip: str, command: str, timeout: float = 3.0) -> str:
+    """Low-level helper: send a Telnet command and return the response line.
+
+    Connects to port 23, sends command+\r, reads one line response.
+    Used as building block for all Telnet-based functions.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    sock.connect((ip, 23))
+    time.sleep(0.1)
+    try:
+        sock.recv(4096)  # drain banner on connect
+    except socket.timeout:
+        pass
+
+    sock.send(command.encode('ascii') + b'\r')
+    resp = b''
+    while True:
+        readable, _, _ = select.select([sock], [], [], timeout)
+        if readable:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            resp += chunk
+        else:
+            break
+    sock.close()
+    return resp.decode('ascii', errors='replace').strip()
+
+
+# ─── Power Commands (Telnet port 23) ─────────────────────────────────────────
+
+def get_power_status(ip: str) -> str:
+    """Query AVR power status via ZM? command.
+
+    Returns 'ON', 'OFF', or 'UNKNOWN' if the response cannot be parsed.
+    """
+    response = _telnet_send_command(ip, 'ZM?')
+    upper = response.upper()
+    if 'ZMON' in upper:
+        return 'ON'
+    elif 'ZMOFF' in upper:
+        return 'OFF'
+    return 'UNKNOWN'
+
+
+def power_on(ip: str) -> bool:
+    """Turn AVR on via ZMON command, then verify with ZM?.
+
+    Waits 5 seconds after ZMON before checking status.
+    Returns True if the AVR confirms ON state.
+    """
+    _telnet_send_command(ip, 'ZMON')
+    # Wait for AVR to boot up
+    time.sleep(5.0)
+    status = get_power_status(ip)
+    return status == 'ON'
+
+
+def power_off(ip: str) -> bool:
+    """Turn AVR off via ZMOFF command.
+
+    Returns True if command was sent successfully (no error).
+    """
+    try:
+        _telnet_send_command(ip, 'ZMOFF')
+        return True
+    except Exception:
+        return False
+
+
+# ─── Subwoofer / Bass / LFE Commands (Telnet port 23) ─────────────────────────
+
+def set_subwoofer_level_off(ip: str) -> bool:
+    """Send PSSWL OFF twice (for old model types).
+
+    Older Denon/Marantz AVRs use PSSWL OFF to disable the subwoofer level.
+    The command is sent twice per transfer.js behavior.
+    """
+    try:
+        _telnet_send_command(ip, 'PSSWL OFF')
+        time.sleep(0.75)
+        _telnet_send_command(ip, 'PSSWL OFF')
+        return True
+    except Exception:
+        return False
+
+
+def set_bass_mode(ip: str, mode: str, is_new_model: bool = False) -> bool:
+    """Set bass mode (LFE, L+M, etc.) via SSMWM or SSSWO.
+
+    Args:
+        ip: AVR IP address.
+        mode: Bass mode string, e.g. 'LFE', 'L+M'.
+        is_new_model: If False (old models), use SSMWM. If True, use SSSWO.
+
+    Sends the command twice per transfer.js behavior.
+    """
+    try:
+        if not is_new_model:
+            cmd = f'SSMWM {mode.upper()}'
+        else:
+            cmd = f'SSSWO {mode.upper()}'
+        _telnet_send_command(ip, cmd)
+        time.sleep(0.75)
+        _telnet_send_command(ip, cmd)
+        return True
+    except Exception:
+        return False
+
+
+def set_lpf_for_lfe(ip: str, freq: int) -> bool:
+    """Set LPF (Low-Pass Filter) for LFE channel via SSLFL.
+
+    Args:
+        ip: AVR IP address.
+        freq: Crossover frequency in Hz (e.g. 120).
+
+    The frequency is zero-padded to 3 digits for the command.
+    Sent twice per transfer.js behavior.
+    """
+    try:
+        freq_str = str(freq).zfill(3)
+        cmd = f'SSLFL {freq_str}'
+        _telnet_send_command(ip, cmd)
+        time.sleep(0.75)
+        _telnet_send_command(ip, cmd)
+        return True
+    except Exception:
+        return False
+
+
+def set_front_speaker_bass_extraction(ip: str, freq: int) -> bool:
+    """Enable front-speaker full-range + set bass extraction frequency.
+    Only supported on newer AVR models.
+    Sequence:
+        1. SSCFRFRO FUL  (x2) - set front speakers to full range
+        2. SSBELFRO {freq:03d}  (x2) - set bass extraction frequency
+
+    Args:
+        ip: AVR IP address.
+        freq: Bass extraction crossover frequency in Hz (e.g. 80).
+
+    Returns True if all commands succeeded.
+    """
+    try:
+        freq_str = str(freq).zfill(3)
+        # Set front speakers to full range
+        _telnet_send_command(ip, 'SSCFRFRO FUL')
+        time.sleep(0.75)
+        _telnet_send_command(ip, 'SSCFRFRO FUL')
+        time.sleep(0.75)
+        # Set bass extraction frequency
+        _telnet_send_command(ip, f'SSBELFRO {freq_str}')
+        time.sleep(0.75)
+        _telnet_send_command(ip, f'SSBELFRO {freq_str}')
+        return True
+    except Exception:
+        return False
+
+
+# ─── HTTP Model Discovery ─────────────────────────────────────────────────────
+
+def discover_model_via_http(ip: str) -> Optional[str]:
+    """Fetch model name from AVR via HTTP /goform endpoint.
+
+    Queries http://<ip>/goform/formMainZone_MainZoneXml.xml and extracts
+    the <ModelName> or <FriendlyName> value.
+
+    Returns the model name string, or None if the endpoint is unreachable
+    or the name cannot be determined.
+    """
+    import re
+    import urllib.request
+    import urllib.error
+
+    url = f'http://{ip}/goform/formMainZone_MainZoneXml.xml'
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            if resp.status != 200:
+                return None
+            content = resp.read().decode('utf-8', errors='replace')
+
+        # Extract <ModelName><value>...</value></ModelName>
+        model_match = re.search(
+            r'<ModelName>\s*<value>(.*?)</value>\s*</ModelName>', content, re.IGNORECASE
+        )
+        friendly_match = re.search(
+            r'<FriendlyName>\s*<value>(.*?)</value>\s*</FriendlyName>', content, re.IGNORECASE
+        )
+        model_name = model_match.group(1).strip() if model_match else None
+        friendly_name = friendly_match.group(1).strip() if friendly_match else None
+
+        # Reject generic placeholder names
+        generic_pattern = re.compile(
+            r'receiver|network\s*(audio|av)|(av|media)\s*(server|renderer|player)',
+            re.IGNORECASE
+        )
+
+        if model_name and not generic_pattern.search(model_name):
+            return model_name
+        if friendly_name and not generic_pattern.search(friendly_name):
+            return friendly_name
+        return None
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
+        return None
 
 
 # ─── SET_SETDAT Command Builder ───────────────────────────────────────────────

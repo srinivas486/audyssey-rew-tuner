@@ -994,3 +994,83 @@ for (tc in targetCurves):           # ['00', '01']
 ---
 
 _Generated from transfer.js for oca_transfer.py implementation._
+
+---
+
+## 11. Telnet Commands (Port 23)
+
+All functions in this section use the `_telnet_send_command()` helper, which connects
+to Telnet port 23, sends `command\r`, and returns the stripped response string.
+
+### Power Commands
+
+```python
+get_power_status(ip: str) -> str
+    # Sends: ZM?
+    # Returns: 'ON', 'OFF', or 'UNKNOWN'
+
+power_on(ip: str) -> bool
+    # Sends: ZMON
+    # Waits 5s, then verifies with ZM?
+    # Returns True only if AVR confirms ON
+
+power_off(ip: str) -> bool
+    # Sends: ZMOFF
+    # Returns True on success
+```
+
+### Subwoofer / Bass / LFE Commands
+
+```python
+set_subwoofer_level_off(ip: str) -> bool
+    # Sends: PSSWL OFF (×2)
+    # For old model types. Sends twice per transfer.js behavior.
+
+set_bass_mode(ip: str, mode: str, is_new_model: bool = False) -> bool
+    # Old models (is_new_model=False): SSMWM {mode}
+    # New models (is_new_model=True): SSSWO {mode}
+    # Sends twice per transfer.js behavior.
+    # Example modes: 'LFE', 'L+M'
+
+set_lpf_for_lfe(ip: str, freq: int) -> bool
+    # Sends: SSLFL {freq:03d} (×2)
+    # Zero-pads frequency to 3 digits, e.g. 120 -> 'SSLFL 120'
+
+set_front_speaker_bass_extraction(ip: str, freq: int) -> bool
+    # New models only. Sends:
+    #   SSCFRFRO FUL (×2)  — set front speakers to full range
+    #   SSBELFRO {freq:03d} (×2)  — set bass extraction frequency
+```
+
+### HTTP Model Discovery
+
+```python
+discover_model_via_http(ip: str) -> Optional[str]
+    # GET http://<ip>/goform/formMainZone_MainZoneXml.xml
+    # Extracts <ModelName> or <FriendlyName> value.
+    # Rejects generic placeholders (receiver, network av, etc.).
+    # Returns model name string or None.
+```
+
+### Command Chaining Example
+
+```python
+# Typical power-on + preset-switch sequence
+if get_power_status(ip) == 'OFF':
+    power_on(ip)
+switch_preset(ip, '2')
+
+# Subwoofer config for old model
+set_subwoofer_level_off(ip)
+set_bass_mode(ip, 'LFE', is_new_model=False)
+set_lpf_for_lfe(ip, 120)
+
+# Subwoofer config for new model (L+M = loudness + mid)
+set_bass_mode(ip, 'L+M', is_new_model=True)
+set_front_speaker_bass_extraction(ip, 80)   # 80 Hz bass extraction
+set_lpf_for_lfe(ip, 120)
+```
+
+---
+
+_Generated from transfer.js for oca_transfer.py implementation._
