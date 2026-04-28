@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AcoustiX Architecture — A1 Evo AcoustiX for Denon X3800H</title>
+  <style>
+    /* ── Reset ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── GSonic Dark Theme ──────────────────────────────────── */
+    :root {
+      --bg:       #0a0a0f;
+      --surface:  #111318;
+      --surface2: #1a1d25;
+      --border:   #232736;
+      --accent:   #00d4aa;
+      --accent2:  #0090ff;
+      --text:     #e8e8f0;
+      --muted:    #6b7280;
+      --success:  #22c55e;
+      --warn:     #f59e0b;
+      --error:    #ef4444;
+      --glow:     rgba(0,212,170,0.25);
+      --font:     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    html { font-size: 15px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code, pre {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+      font-size: 0.875em;
+      background: var(--surface2);
+      border-radius: 5px;
+    }
+    code { padding: 0.15em 0.45em; color: #a8e6cf; }
+    pre {
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.5;
+      margin: 1rem 0;
+    }
+    pre code { background: none; padding: 0; color: var(--text); font-size: 0.85em; }
+
+    /* ── Layout ────────────────────────────────────────────── */
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 1.5rem 4rem;
+    }
+
+    /* ── Sticky Nav ─────────────────────────────────────────── */
+    .toc {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.7rem 1.5rem;
+      overflow-x: auto;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+      scrollbar-width: none;
+    }
+    .toc::-webkit-scrollbar { display: none; }
+    .toc-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-right: 0.5rem;
+      flex-shrink: 0;
+    }
+    .toc a {
+      font-size: 0.78rem;
+      color: var(--muted);
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .toc a:hover { color: var(--text); background: var(--surface2); text-decoration: none; }
+
+    /* ── Page Header ────────────────────────────────────────── */
+    .page-header {
+      padding: 2.5rem 0 1.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2.5rem;
+    }
+    .page-header h1 {
+      font-size: 1.9rem;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+    }
+    .page-header .subtitle {
+      margin-top: 0.5rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .page-header .badge {
+      display: inline-block;
+      background: rgba(0,212,170,0.12);
+      border: 1px solid rgba(0,212,170,0.3);
+      color: var(--accent);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.6rem;
+      border-radius: 3px;
+      margin-top: 0.6rem;
+    }
+
+    /* ── Section Headings ───────────────────────────────────── */
+    h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      margin: 2.8rem 0 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h2::before {
+      content: "▌";
+      color: var(--accent);
+      margin-right: 0.5rem;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent2);
+      margin: 1.8rem 0 0.6rem;
+      letter-spacing: -0.01em;
+    }
+    h4 {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--text);
+      margin: 1.2rem 0 0.4rem;
+    }
+
+    p { margin: 0.65rem 0; }
+
+    ul, ol { margin: 0.6rem 0 0.6rem 1.4rem; }
+    li { margin: 0.3rem 0; }
+
+    /* ── Diagram Box ────────────────────────────────────────── */
+    .diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin: 1rem 0;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.88em;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.7;
+      color: #c8d3e8;
+    }
+    .diagram .label { color: var(--accent); font-weight: 700; }
+    .diagram .dim   { color: var(--muted); }
+    .diagram .val   { color: #a8e6cf; }
+    .diagram .port  { color: var(--warn); }
+    .diagram .arrow { color: #ff7eb6; }
+    .diagram .note  { color: var(--muted); font-style: italic; }
+
+    /* ── Table ─────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; margin: 1rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88em;
+    }
+    thead tr { background: var(--surface2); }
+    th {
+      text-align: left;
+      padding: 0.6rem 0.9rem;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 2px solid var(--border);
+    }
+    td {
+      padding: 0.55rem 0.9rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
+    td code { font-size: 0.85em; }
+
+    /* ── Info Boxes ─────────────────────────────────────────── */
+    .info-box {
+      background: rgba(0,144,255,0.07);
+      border-left: 3px solid var(--accent2);
+      border-radius: 0 6px 6px 0;
+      padding: 0.85rem 1.1rem;
+      margin: 1rem 0;
+      font-size: 0.92em;
+    }
+    .warn-box {
+      background: rgba(245,158,11,0.07);
+      border-left: 3px solid var(--warn);
+      border-radius: 0 6px 6px 0;
+      padding: 0.85rem 1.1rem;
+      margin: 1rem 0;
+      font-size: 0.92em;
+    }
+    .success-box {
+      background: rgba(34,197,94,0.07);
+      border-left: 3px solid var(--success);
+      border-radius: 0 6px 6px 0;
+      padding: 0.85rem 1.1rem;
+      margin: 1rem 0;
+      font-size: 0.92em;
+    }
+    .box-title {
+      font-weight: 700;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.35rem;
+    }
+    .info-box .box-title { color: var(--accent2); }
+    .warn-box .box-title { color: var(--warn); }
+    .success-box .box-title { color: var(--success); }
+
+    /* ── JSON Block ─────────────────────────────────────────── */
+    .json-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      margin: 0.8rem 0;
+      font-size: 0.83em;
+      line-height: 1.55;
+    }
+    .json-block .key    { color: #79c0ff; }
+    .json-block .str    { color: #a5d6ff; }
+    .json-block .num    { color: #f0883e; }
+    .json-block .bool   { color: #d2a8ff; }
+    .json-block .null   { color: var(--muted); }
+    .json-block .punct  { color: #8b949e; }
+
+    /* ── Step Flow ─────────────────────────────────────────── */
+    .step-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 1rem 0;
+    }
+    .step {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      padding: 0.9rem 1.1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+    }
+    .step-num {
+      background: rgba(0,212,170,0.15);
+      border: 1px solid rgba(0,212,170,0.3);
+      color: var(--accent);
+      font-size: 0.72rem;
+      font-weight: 800;
+      font-family: monospace;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+    }
+    .step-body { flex: 1; }
+    .step-title {
+      font-weight: 700;
+      font-size: 0.92em;
+      color: var(--text);
+      margin-bottom: 0.2rem;
+    }
+    .step-desc { color: var(--muted); font-size: 0.88em; }
+    .step-cmd  {
+      margin-top: 0.4rem;
+      font-size: 0.82em;
+    }
+
+    /* ── Channel Grid ──────────────────────────────────────── */
+    .channel-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 0.5rem;
+      margin: 0.8rem 0;
+    }
+    .channel-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 0.4rem 0.75rem;
+      font-family: monospace;
+      font-size: 0.85em;
+      color: var(--accent2);
+      text-align: center;
+    }
+
+    /* ── Responsive ─────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .container { padding: 0 1rem 3rem; }
+      h2 { font-size: 1.1rem; }
+      .toc a { font-size: 0.72rem; padding: 0.2rem 0.4rem; }
+      pre { font-size: 0.78em; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sticky Table of Contents ─────────────────────────────────────────── -->
+<nav class="toc" id="toc">
+  <span class="toc-label">Sections</span>
+  <a href="#overview">Overview</a>
+  <a href="#measurement-flow">Measurements</a>
+  <a href="#rew-api">REW API</a>
+  <a href="#target-curves">Target Curves</a>
+  <a href="#filter-algorithm">Filter Algorithm</a>
+  <a href="#avr-telemetry">AVR Telemetry</a>
+  <a href="#ssdp-discovery">SSDP Discovery</a>
+  <a href="#calibration-formats">File Formats</a>
+  <a href="#end-to-end">End-to-End Flow</a>
+  <a href="#api-routes">API Routes</a>
+  <a href="#limitations">Limitations</a>
+</nav>
+
+<div class="container">
+
+<!-- ── Page Header ─────────────────────────────────────────────────────── -->
+<header class="page-header">
+  <h1>AcoustiX Architecture</h1>
+  <p class="subtitle">A1 Evo AcoustiX — Complete System Documentation for Denon X3800H + REW Integration</p>
+  <span class="badge">Room EQ Correction · Denon MultEQ XT32 · REW Automation</span>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 1. SYSTEM OVERVIEW                                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="overview">
+  <h2>1. System Overview</h2>
+
+  <p>The A1 Evo AcoustiX system bridges <strong>Room EQ Wizard (REW)</strong> — a professional room measurement tool — with the <strong>Denon X3800H AVR</strong>'s built-in MultEQ XT32 calibration system. The Node.js server acts as a central hub, coordinating measurement data, EQ filter optimization, and AVR telemetry.</p>
+
+  <h3>Architecture Diagram</h3>
+<div class="diagram">┌─────────────────────────────────────────────────────────────────────────┐
+│                        A1 Evo AcoustiX — System Architecture               │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────┐         ┌──────────────────────────────────────┐
+  │   REW (Desktop)   │         │           Browser (UI)               │
+  │  localhost:4735   │         │   http://localhost:18443 (default)   │
+  │                   │         │                                      │
+  │  • Makes acoustic │         │  • Loads measurements (.txt/.ady)   │
+  │    measurements    │         │  • Selects target curves            │
+  │  • Exports filter  │         │  • Displays optimization progress    │
+  │    coefficients    │         │  • Saves/loads calibrations         │
+  └────────┬───────────┘         └───────────────┬──────────────────────┘
+           │                                   │
+           │ HTTP JSON                         │ HTTP JSON
+           │ (port 4735)                       │ (port 18443)
+           │                                   │
+           ▼                                   ▼
+  ┌───────────────────────────────────────────────────────────────┐
+  │              Node.js Server (server.js)                       │
+  │                    Port: 18443                                │
+  │                                                              │
+  │  ┌────────────────┐    ┌──────────────────────────────┐    │
+  │  │  REW API Proxy  │    │       Express Routes          │    │
+  │  │  /api/rew/*    │    │  /api/avr/*  /api/calibration │    │
+  │  └───────┬────────┘    └──────────────┬─────────────────┘    │
+  │          │                            │                      │
+  │  ┌───────▼────────────────────────────▼──────────────────┐  │
+  │  │              AVR Telemetry Module                     │  │
+  │  │   raw TCP Telnet (port 23) → Denon X3800H            │  │
+  │  │   SSDP UDP discovery (239.255.255.250:1900)          │  │
+  │  └───────────────────────────────────────────────────────┘  │
+  │                                                              │
+  │  Data dirs:                                                  │
+  │    calibrations/*.oca   ← saved calibration files          │
+  │    target_curves/*.txt   ← target response curves           │
+  └───────────────────────────────────────────────────────────────┘
+           │
+           │ raw TCP Telnet (port 23)
+           ▼
+  ┌──────────────────┐
+  │  Denon X3800H    │
+  │  MultEQ XT32     │
+  │                  │
+  │  • 9.4 channels  │
+  │  • 6 PEQ/speaker  │
+  │  • 1 PEQ/sub ch  │
+  │  • Per-channel   │
+  │    distance/trim │
+  └──────────────────┘
+
+<span class="note">Dashed arrows = HTTP/JSON API. Solid arrows = raw TCP Telnet.</span></div>
+
+  <h3>Data Flow Summary</h3>
+  <ul>
+    <li><strong>REW ↔ Server:</strong> HTTP JSON on port 4735 (proxied through <code>/api/rew/*</code>)</li>
+    <li><strong>Browser ↔ Server:</strong> HTTP JSON on port 18443 (default; auto-assigned if busy)</li>
+    <li><strong>Server → AVR:</strong> Raw TCP Telnet on port 23</li>
+    <li><strong>Server → AVR Discovery:</strong> SSDP UDP multicast on <code>239.255.255.250:1900</code></li>
+  </ul>
+
+  <div class="info-box">
+    <div class="box-title">Key Insight</div>
+    <p>The Node.js server is the "brain" — it never stores measurement data long-term. All measurement files (.txt from REW, .ady from Denon MultEQ Editor) are loaded into the browser, which sends them to REW via the server proxy. The server's jobs are: route API calls, manage the Telnet connection to the AVR, and persist calibration files.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 2. MEASUREMENT COLLECTION FLOW                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="measurement-flow">
+  <h2>2. Measurement Collection Flow</h2>
+
+  <h3>2a. How REW Measures Room Response</h3>
+
+  <p>REW uses a <strong>swept-sine log chirp</strong> method to measure the room's frequency response:</p>
+
+  <ol>
+    <li>REW generates a logarithmic chirp signal (a sine wave that sweeps from ~20 Hz to ~20 kHz, increasing in frequency exponentially)</li>
+    <li>This chirp is played through the speaker being measured</li>
+    <li>A calibrated measurement microphone captures the result</li>
+    <li>REW performs a Fourier transform (FFT) on the recorded signal to extract the impulse response</li>
+    <li>From the impulse response, the magnitude frequency response is computed</li>
+  </ol>
+
+  <div class="info-box">
+    <div class="box-title">Why Log Chirp?</div>
+    <p>Logarithmic chirps provide a higher signal-to-noise ratio than sweep-sine or pink noise methods, especially at low frequencies. The logarithmic sweep also provides uniform energy distribution across all octaves, ensuring good measurement accuracy from 20 Hz to 20 kHz in a single sweep.</p>
+  </div>
+
+  <h3>2b. REW Measurement File Formats</h3>
+
+  <p>After measurement, REW stores response data in two relevant formats:</p>
+
+  <h4>.txt (Frequency/Magnitude Export)</h4>
+  <p>Plain text, two columns (frequency in Hz, magnitude in dB). This is the primary format used for importing into REW's EQ module:</p>
+
+<div class="json-block"><span class="punct">[Header lines starting with # are comments]</span>
+<span class="num">20.00</span> <span class="num">-3.2</span>
+<span class="num">20.50</span> <span class="num">-2.9</span>
+<span class="num">21.00</span> <span class="num">-3.1</span>
+<span class="punct">...</span>
+<span class="num">1000.00</span> <span class="num">0.5</span>
+<span class="punct">...</span>
+<span class="num">20000.00</span> <span class="num">-4.8</span></div>
+
+  <h4>.frd (Frequency Response Data)</h4>
+  <p>Same two-column format as .txt (frequency + dB), but without header comments. Used by some external tools.</p>
+
+  <h3>2c. .ady Files from Denon MultEQ Editor</h3>
+
+  <p>The Denon MultEQ Editor app (available on iOS/Android) can export calibration sessions as <code>.ady</code> files. These are JSON files containing the full measurement data and detected PEQ filters from Denon's own Audyssey calibration.</p>
+
+  <p>The user imports a .ady file via the browser's file input:</p>
+
+<div class="diagram">Browser File Input → FileReader.readAsText() → parseAdyFile() → normalized channel format</div>
+
+  <h3>2d. ADY JSON Format</h3>
+
+  <p>The .ady file is a JSON object with a <code>detectedChannels</code> array. Each channel entry contains the measured response data and the PEQ filters that Audyssey detected:</p>
+
+<div class="json-block">{
+  <span class="key">"version"</span>: <span class="str">"1.0"</span>,
+  <span class="key">"appVersion"</span>: <span class="str">"3.0"</span>,
+  <span class="key">"detectedChannels"</span>: [
+    {
+      <span class="key">"channelName"</span>: <span class="str">"FL"</span>,
+      <span class="key">"responseData"</span>: [
+        [<span class="num">20.0</span>, <span class="num">-3.2</span>],
+        [<span class="num">21.0</span>, <span class="num">-2.9</span>],
+        [<span class="num">22.0</span>, <span class="num">-3.1</span>],
+        <span class="punct">...</span>
+      ],
+      <span class="key">"peqFilters"</span>: [
+        { <span class="key">"freq"</span>: <span class="num">63.5</span>, <span class="key">"gain"</span>: <span class="num">-8.2</span>, <span class="key">"q"</span>: <span class="num">1.25</span> },
+        { <span class="key">"freq"</span>: <span class="num">125.0</span>, <span class="key">"gain"</span>: <span class="num">4.1</span>, <span class="key">"q"</span>: <span class="num">2.0</span> },
+        { <span class="key">"freq"</span>: <span class="num">250.0</span>, <span class="key">"gain"</span>: <span class="num">-2.7</span>, <span class="key">"q"</span>: <span class="num">3.5</span> }
+      ]
+    },
+    {
+      <span class="key">"channelName"</span>: <span class="str">"SW"</span>,
+      <span class="key">"responseData"</span>: <span class="punct">[...]</span>,
+      <span class="key">"peqFilters"</span>: <span class="punct">[...]</span>
+    }
+  ],
+  <span class="key">"micCalibration"</span>: { <span class="key">"micGain"</span>: <span class="num">0.85</span> },
+  <span class="key">"channelReport"</span>: { <span class="key">"crossover"</span>: <span class="num">80</span> }
+}</div>
+
+  <h3>2e. parseAdyFile() — Normalization</h3>
+
+  <p>The <code>parseAdyFile()</code> function in <code>a1evo-calibration.js</code> transforms the Denon format into an internal normalized channel format:</p>
+
+<pre><code>function parseAdyFile(jsonData) {
+  // Parse JSON if passed as a string
+  if (typeof jsonData === 'string') {
+    jsonData = JSON.parse(jsonData);
+  }
+
+  const channels = [];
+  if (jsonData.detectedChannels) {
+    for (const ch of jsonData.detectedChannels) {
+      channels.push({
+        name:         ch.channelName,           // "FL", "SW", etc.
+        responseData: ch.responseData || [],    // [[freq, dB], ...]
+        filters: (ch.peqFilters || []).map(f => ({
+          freq: f.freq,   // Hz
+          gain: f.gain,   // dB
+          q:    f.q,      // Q factor
+        })),
+      });
+    }
+  }
+
+  return {
+    channels,
+    micCalibration: jsonData.micCalibration || {},
+    channelReport:  jsonData.channelReport  || {},
+  };
+}</code></pre>
+
+  <p>The resulting normalized format is channel-agnostic and used throughout the app for both display and transfer to REW.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 3. REW INTEGRATION (API port 4735)                                   -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="rew-api">
+  <h2>3. REW Integration (API Port 4735)</h2>
+
+  <p>REW exposes a JSON HTTP API on port 4735. The A1 Evo server proxies these calls so the browser can drive REW without Same-Origin Policy issues. All REW endpoints return JSON.</p>
+
+  <h3>3a. REW API Endpoints</h3>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Endpoint</th>
+          <th>Method</th>
+          <th>Description</th>
+          <th>Key Payload / Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>/eq/import-impulse</code></td>
+          <td>POST</td>
+          <td>Import impulse response for a channel as base64 Big-Endian IEEE 754 float32</td>
+          <td>
+            <strong>Request:</strong>
+            <code>{"channel":"FL","irData":"&lt;base64&gt;","sampleRate":48000}</code><br>
+            <strong>Response:</strong>
+            <code>{"status":"ok","channel":"FL"}</code>
+          </td>
+        </tr>
+        <tr>
+          <td><code>/eq/filter</code></td>
+          <td>POST</td>
+          <td>Configure EQ filter tasks (which channels to process, limits)</td>
+          <td>
+            <strong>Request:</strong>
+            <code>{"tasks":[{"channel":"FL","maxFilters":6,"maxCut":12,"maxBoost":6}]}</code><br>
+            <strong>Response:</strong>
+            <code>{"filters":[{"freq":63.5,"gain":-8.2,"q":1.25},...]}</code>
+          </td>
+        </tr>
+        <tr>
+          <td><code>/eq/match-target</code></td>
+          <td>POST</td>
+          <td>Run automatic EQ optimization matching the loaded target curve</td>
+          <td>
+            <strong>Request:</strong>
+            <code>{"channel":"FL","targetCurve":"acoustix.txt","maxFilters":6}</code><br>
+            <strong>Response:</strong>
+            <code>{"filters":[...],"targetMatch":98.5,"deviation":1.2}</code>
+          </td>
+        </tr>
+        <tr>
+          <td><code>/measurements/curve</code></td>
+          <td>GET</td>
+          <td>Retrieve the measured frequency response curve for a channel</td>
+          <td>
+            <strong>Response:</strong>
+            <code>[[20,-3.2],[21,-2.9],...,[20000,-4.8]]</code><br>
+            (array of [frequency, dB] pairs)
+          </td>
+        </tr>
+        <tr>
+          <td><code>/eq/house-curve</code></td>
+          <td>GET / POST</td>
+          <td>Get or set REW's house curve (target response shape)</td>
+          <td>
+            <strong>POST Body:</strong>
+            <code>{"curveData":[[20,-3],[50,0],[1000,0],[20000,-3]]}</code><br>
+            <strong>Response:</strong>
+            <code>{"status":"ok"}</code>
+          </td>
+        </tr>
+        <tr>
+          <td><code>/eq/export-raw</code></td>
+          <td>POST</td>
+          <td>Export calculated PEQ filter coefficients for a channel</td>
+          <td>
+            <strong>Request:</strong>
+            <code>{"channel":"FL"}</code><br>
+            <strong>Response:</strong>
+            <code>{"coefficients":{"b":[...],"a":[...]}}</code>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>3b. Server-Side REW Proxy</h3>
+
+  <p>In <code>server.js</code>, the <code>proxyRew()</code> function forwards browser requests to REW's localhost API:</p>
+
+<pre><code>const REW_API = 'http://127.0.0.1:4735';
+
+function proxyRew(req, res, pathSuffix, body) {
+  return new Promise((resolve, reject) => {
+    const url = `${REW_API}${pathSuffix}`;
+    const options = {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    };
+    const fetchReq = http.request(url, options, (fetchRes) => {
+      let data = '';
+      fetchRes.on('data', (chunk) => data += chunk);
+      fetchRes.on('end', () => {
+        try {
+          resolve({ status: fetchRes.statusCode, body: JSON.parse(data) });
+        } catch {
+          resolve({ status: fetchRes.statusCode, body: data });
+        }
+      });
+    });
+    fetchReq.on('error', reject);
+    if (body) fetchReq.write(JSON.stringify(body));
+    fetchReq.end();
+  });
+}</code></pre>
+
+  <p>The browser calls <code>/api/rew/eq/match-target</code>, and the server forwards it to <code>http://127.0.0.1:4735/eq/match-target</code>.</p>
+
+  <h3>3c. Client-Side REW API (a1evo-rew.js)</h3>
+
+  <p>The browser-side library <code>a1evo-rew.js</code> wraps all REW calls with <code>fetch()</code> to the server proxy:</p>
+
+<pre><code>async function rewImportImpulse(channel, irData, sampleRate = 48000) {
+  // Convert Float32Array → base64 Big-Endian IEEE 754 float32
+  let buffer;
+  if (irData instanceof Float32Array) {
+    buffer = new ArrayBuffer(irData.length * 4);
+    const view = new DataView(buffer);
+    for (let i = 0; i < irData.length; i++) {
+      view.setFloat32(i * 4, irData[i], false); // Big-Endian
+    }
+  } else {
+    buffer = irData.buffer;
+  }
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+
+  const res = await fetch('/api/rew/eq/import-impulse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel, irData: base64, sampleRate }),
+  });
+  return res.json();
+}
+
+async function rewMatchTarget(channel, targetCurveFile, options = {}) {
+  const res = await fetch('/api/rew/eq/match-target', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel, targetCurve: targetCurveFile, ...options }),
+  });
+  return res.json();
+}</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 4. TARGET CURVE SYSTEM                                               -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="target-curves">
+  <h2>4. Target Curve System</h2>
+
+  <h3>What Is a Target Curve?</h3>
+
+  <p>A <strong>target curve</strong> defines the <em>desired</em> frequency response shape — what you want the room + speaker system to sound like after EQ is applied. REW's EQ optimization algorithm generates filters that bring the measured response as close as possible to the target curve.</p>
+
+  <p>Target curves typically:</p>
+  <ul>
+    <li>Roll off the very low frequencies slightly (e.g., -3 dB at 20 Hz) to account for room gain and protect subwoofers</li>
+    <li>Stay flat through the midrange (the "neutral" region)</li>
+    <li>Apply a gentle high-frequency roll-off (mimicking the natural sound of a well-treated room)</li>
+  </ul>
+
+  <h3>File Location and Format</h3>
+
+  <p>Target curves live in <code>target_curves/</code> next to <code>server.js</code>:</p>
+
+<div class="json-block">target_curves/
+ ├── acoustix.txt      ← the default AcoustiX target curve
+ └── .gitkeep</div>
+
+  <p>Each <code>.txt</code> file is a plain text file with two tab-separated columns: frequency (in decihertz, i.e., 20 = 20 Hz, 1000 = 1000 Hz) and gain in dB:</p>
+
+<pre><code># Default AcoustiX Target Curve
+# Format: frequency(dHz) TAB gain(dB)
+20      -3.0
+25      -2.5
+31.5    -2.0
+40      -1.5
+50      -1.0
+63      -0.5
+80      0.0
+100     0.0
+125     0.0
+160     0.0
+200     0.0
+250     0.0
+315     0.0
+400     0.0
+500     0.0
+630     0.0
+800     0.0
+1000    0.0
+1250    0.0
+1600    0.0
+2000    0.0
+2500    0.0
+3150    0.0
+4000    0.0
+5000    0.0
+6300    0.0
+8000    0.0
+10000   0.0
+12500   0.0
+16000   0.0
+20000   0.0</code></pre>
+
+  <h3>Loading a Target Curve</h3>
+
+  <p>The browser fetches the curve file content and passes it to REW via <code>rewMatchTarget()</code>:</p>
+
+<pre><code>async function rewMatchTarget(channel, targetCurveFile, options = {}) {
+  // First load the curve file content from the server
+  let targetCurve = null;
+  try {
+    const res = await fetch(`/api/target-curves/${encodeURIComponent(targetCurveFile)}`);
+    targetCurve = await res.text();
+  } catch (e) {
+    console.warn('Could not load target curve file');
+  }
+
+  const body = {
+    channel,
+    targetCurve: targetCurveFile,   // filename passed to REW
+    ...options,
+  };
+
+  const res = await fetch('/api/rew/eq/match-target', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}</code></pre>
+
+  <div class="info-box">
+    <div class="box-title">Note on Frequency Units</div>
+    <p>REW uses <strong>decihertz</strong> (dHz) in its target curve files — i.e., 1000 Hz is written as <code>1000</code>, not <code>100.0</code>. The default AcoustiX curve uses this format. If you're creating custom curves, make sure frequencies are in dHz (whole Hz units).</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 5. FILTER GENERATION ALGORITHM                                       -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="filter-algorithm">
+  <h2>5. Filter Generation Algorithm</h2>
+
+  <h3>How REW's EQ Module Works</h3>
+
+  <p>REW's EQ module is a <strong>parametric equalizer (PEQ)</strong> optimizer. Given a measured frequency response and a target curve, it automatically:</p>
+
+  <ol>
+    <li><strong>Detects peaks</strong> in the measured response using an automated peak-detection algorithm</li>
+    <li><strong>Creates matching inverse filters</strong> — each PEQ filter has the opposite magnitude response of the peak it targets</li>
+    <li><strong>Runs an optimization loop</strong> that adjusts filter frequency, gain, and Q to minimize the error between the measured response and the target curve</li>
+    <li><strong>Respects limit constraints</strong> (max cut, max boost, frequency range, number of filters)</li>
+  </ol>
+
+  <h3>Parametric EQ Filter Parameters</h3>
+
+  <p>Each PEQ filter is defined by three parameters:</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Parameter</th><th>Description</th><th>Typical Range</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Frequency</strong> (Hz)</td><td>Center frequency of the filter</td><td>20 – 20,000 Hz</td></tr>
+        <tr><td><strong>Gain</strong> (dB)</td><td>Amount of cut or boost at the center frequency. Negative = cut, positive = boost.</td><td>–15 to +6 dB</td></tr>
+        <tr><td><strong>Q</strong></td><td>Quality factor — bandwidth of the filter. Higher Q = narrower filter.</td><td>0.5 – 20</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Filter Count Limits</h3>
+
+  <ul>
+    <li><strong>Speakers (FL, FR, C, etc.):</strong> up to <strong>6 PEQ filters</strong> per channel</li>
+    <li><strong>Subwoofer (SW):</strong> up to <strong>7 filters</strong> (6 + 1 additional for low-frequency correction)</li>
+    <li>REW may generate fewer filters than the maximum if the response doesn't require them</li>
+  </ul>
+
+  <h3>Target Curve Matching Process</h3>
+
+  <p>The full optimization sequence per channel:</p>
+
+<div class="diagram">1. rewImportImpulse(channel, irData, sampleRate)
+      → REW loads the impulse response for this channel
+
+2. rewMatchTarget(channel, targetCurveFile, options)
+      → REW runs: detect peaks → create inverse filters → optimize
+      → Returns: { filters: [{freq, gain, q}, ...], targetMatch: %, deviation: dB }
+
+3. rewExportRaw(channel)
+      → Optionally export biquad coefficients for external use</div>
+
+  <h3>Limit Parameters</h3>
+
+  <p>When calling <code>rewMatchTarget()</code>, the following constraints can be passed:</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Option</th><th>Default</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>maxFilters</code></td><td>6</td><td>Maximum number of PEQ filters to generate</td></tr>
+        <tr><td><code>maxCut</code></td><td>12 dB</td><td>Largest cut allowed per filter</td></tr>
+        <tr><td><code>maxBoost</code></td><td>6 dB</td><td>Largest boost allowed per filter</td></tr>
+        <tr><td><code>freqLimitLow</code></td><td>20 Hz</td><td>Lowest frequency for EQ correction</td></tr>
+        <tr><td><code>freqLimitHigh</code></td><td>20000 Hz</td><td>Highest frequency for EQ correction</td></tr>
+        <tr><td><code>targetLevel</code></td><td>0 dB</td><td>Reference level for matching</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Subwoofer vs Speaker Handling</h3>
+
+  <p>Subwoofers are handled differently because their frequency range is limited and room effects are more severe at low frequencies:</p>
+  <ul>
+    <li>Subwoofers get an additional filter slot (7 vs 6) for deep-bass corrections</li>
+    <li>The target curve for subwoofers typically starts with a steeper low-frequency roll-off</li>
+    <li>Crossover settings (e.g., 80 Hz) are managed by the AVR independently, not by REW</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 6. AVR TELEMETRY PROTOCOL (Telnet port 23)                           -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="avr-telemetry">
+  <h2>6. AVR Telemetry Protocol (Telnet Port 23)</h2>
+
+  <h3>Overview</h3>
+
+  <p>The Denon X3800H exposes a command-line interface over raw TCP Telnet (port 23). The Node.js server maintains a persistent Telnet connection to the AVR and sends commands to configure PEQ filters, distances, and trims. This is the same protocol used by Denon's own apps and calibration software.</p>
+
+  <div class="warn-box">
+    <div class="box-title">Connection State Machine</div>
+    <p>The AVR connection follows a strict state machine: <strong>disconnected → connecting → ready</strong>. Commands are only sent when <code>ready === true</code>. The server maintains a single in-memory socket singleton.</p>
+  </div>
+
+  <h3>Channel List</h3>
+
+  <p>The X3800H supports 15 channels (9.4.6 configuration):</p>
+
+  <div class="channel-grid">
+    <div class="channel-chip">FL — Front Left</div>
+    <div class="channel-chip">FR — Front Right</div>
+    <div class="channel-chip">C — Center</div>
+    <div class="channel-chip">SW — Subwoofer</div>
+    <div class="channel-chip">SL — Surround Left</div>
+    <div class="channel-chip">SR — Surround Right</div>
+    <div class="channel-chip">BL — Back Left</div>
+    <div class="channel-chip">BR — Back Right</div>
+    <div class="channel-chip">SBL — Surround Back L</div>
+    <div class="channel-chip">SBR — Surround Back R</div>
+    <div class="channel-chip">FD — Front Height L</div>
+    <div class="channel-chip">FS — Front Height R</div>
+    <div class="channel-chip">TM — Top Middle</div>
+    <div class="channel-chip">RL — Rear Height L</div>
+    <div class="channel-chip">RR — Rear Height R</div>
+  </div>
+
+  <h3>Command Reference</h3>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Command</th><th>Format</th><th>Description</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Set PEQ</strong></td>
+          <td><code>MSSV&lt;ch&gt;=&lt;freq&gt;Hz,&lt;gain&gt;dB,Q=&lt;q&gt;</code></td>
+          <td>Set a PEQ filter on channel</td>
+          <td><code>MSSVFL=63Hz,-8.2dB,Q=1.25</code></td>
+        </tr>
+        <tr>
+          <td><strong>Set Distance</strong></td>
+          <td><code>MSD&lt;ch&gt;&lt;distance_mm&gt;</code></td>
+          <td>Set speaker distance in millimeters</td>
+          <td><code>MSDFL3450</code> (3450 mm)</td>
+        </tr>
+        <tr>
+          <td><strong>Set Trim</strong></td>
+          <td><code>MST&lt;ch&gt;&lt;trim_x10&gt;</code></td>
+          <td>Set channel trim in 0.1 dB units</td>
+          <td><code>MSTFL105</code> (+10.5 dB)</td>
+        </tr>
+        <tr>
+          <td><strong>Query Filter</strong></td>
+          <td><code>MSQ&lt;ch&gt;</code></td>
+          <td>Query current PEQ filter settings</td>
+          <td><code>MSQFL</code></td>
+        </tr>
+        <tr>
+          <td><strong>Zone Commands</strong></td>
+          <td><code>ZEM|ZEO|ZEA</code></td>
+          <td>Zone power: Main Off / On / Audio</td>
+          <td><code>ZEM</code></td>
+        </tr>
+        <tr>
+          <td><strong>Power Query</strong></td>
+          <td><code>PWST?</code></td>
+          <td>Query AVR power status</td>
+          <td><code>PWST?</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Response Format</h3>
+
+  <p>All responses from the AVR are terminated with <code>\r</code> (carriage return). The server accumulates data until <code>\r</code> is detected, then resolves the promise:</p>
+
+<pre><code>function avrSendCommand(cmd) {
+  return new Promise((resolve, reject) => {
+    let response = '';
+    const timeout = setTimeout(() => {
+      avrSocket.removeListener('data', onData);
+      reject(new Error('Command timeout'));
+    }, 5000);   // ← 5 second timeout per command
+
+    function onData(data) {
+      response += data.toString();
+      if (response.includes('\r')) {
+        clearTimeout(timeout);
+        avrSocket.removeListener('data', onData);
+        resolve(response.trim());
+      }
+    }
+
+    avrSocket.on('data', onData);
+    avrSocket.write(cmd + '\r', (err) => {
+      if (err) { clearTimeout(timeout); reject(err); }
+    });
+  });
+}</code></pre>
+
+  <h3>JavaScript Code Snippets</h3>
+
+  <h4>setPEQ(channel, freq, gain, q)</h4>
+<pre><code>async function setPEQ(channel, freq, gain, q) {
+  const cmd = `MSSV${channel}=${freq}Hz,${gain}dB,Q=${q}`;
+  return sendAVRCommand(cmd);
+}
+
+// Usage: setPEQ('FL', 63.5, -8.2, 1.25)
+// Sends: MSSVFL=63.5Hz,-8.2dB,Q=1.25</code></pre>
+
+  <h4>setPEQBatch(channel, filters)</h4>
+<pre><code>async function setPEQBatch(channel, filters) {
+  const results = [];
+  for (const f of filters) {
+    const r = await setPEQ(channel, f.freq, f.gain, f.q);
+    results.push(r);
+    // Small delay between commands to avoid overwhelming the AVR
+    await new Promise(r => setTimeout(r, 50));
+  }
+  return results;
+}</code></pre>
+
+  <h4>setDistance(channel, distance_mm)</h4>
+<pre><code>async function setDistance(channel, distance_mm) {
+  const cmd = `MSD${channel}${distance_mm}`;
+  return sendAVRCommand(cmd);
+}
+
+// Usage: setDistance('FL', 3450)  // 3.45 meters
+// Sends: MSDFL3450</code></pre>
+
+  <h4>setTrim(channel, trim_x10)</h4>
+<pre><code>async function setTrim(channel, trim_x10) {
+  const cmd = `MST${channel}${trim_x10}`;
+  return sendAVRCommand(cmd);
+}
+
+// Usage: setTrim('FL', 105)   // +10.5 dB
+// Usage: setTrim('FL', -20)   // -2.0 dB
+// Sends: MSTFL105</code></pre>
+
+  <h4>queryFilters(channel)</h4>
+<pre><code>async function queryFilters(channel) {
+  return sendAVRCommand(`MSQ${channel}`);
+}
+
+// Response example: "MSSVFL=63.5Hz,-8.2dB,Q=1.25,125Hz,4.1dB,Q=2.0,250Hz,-2.7dB,Q=3.5"</code></pre>
+
+  <h3>AvrClient Class (avr/avr-client.js)</h3>
+
+  <p>The full <code>AvrClient</code> class wraps all Telnet operations with queuing, timeout handling, and connection state management:</p>
+
+<pre><code>class AvrClient {
+  constructor() {
+    this.socket = null;
+    this.host = null;
+    this.ready = false;
+    this._commandQueue = [];
+    this._processingQueue = false;
+    this._responseHandlers = new Map();
+    this._buffer = '';
+  }
+
+  async connect(host) {
+    if (this.socket && !this.socket.destroyed) this.socket.destroy();
+    this.host = host;
+    this.socket = net.connect(23, host);
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.socket.destroy();
+        reject(new Error('Connection timeout (5s)'));
+      }, 5000);
+
+      this.socket.on('connect', () => {
+        clearTimeout(timeout);
+        this._onceData((data) => {
+          this.ready = true;
+          resolve({ host, port: 23, connected: true });
+        });
+        this.socket.write('?\r');
+      });
+
+      this.socket.on('error', reject);
+    });
+  }
+
+  async sendCommand(cmd) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this._responseHandlers.delete('line');
+        reject(new Error(`Command timeout: ${cmd}`));
+      }, 5000);
+
+      this._responseHandlers.set('line', (line) => {
+        clearTimeout(timer);
+        this._responseHandlers.delete('line');
+        resolve(line);
+      });
+
+      this.socket.write(cmd + '\r', (err) => {
+        if (err) { clearTimeout(timer); reject(err); }
+      });
+    });
+  }
+}</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 7. SSDP AVR DISCOVERY (UDP multicast 239.255.255.250:1900)           -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="ssdp-discovery">
+  <h2>7. SSDP AVR Discovery (UDP Multicast 239.255.255.250:1900)</h2>
+
+  <h3>How It Works</h3>
+
+  <p>Denon/Marantz AVRs implement <strong>SSDP (Simple Service Discovery Protocol)</strong> for zero-configuration network discovery. The server sends an <strong>M-SEARCH</strong> UDP multicast request to the reserved SSDP address <code>239.255.255.250</code> on port <code>1900</code>. Any compatible AVR on the local network responds with its device description URL.</p>
+
+  <h3>M-SEARCH Request Format</h3>
+
+<pre><code>M-SEARCH * HTTP/1.1
+HOST: 239.255.255.250:1900
+MAN: "ssdp:discover"
+MX: 3
+ST: urn:schemas-denon-com:device:ACT-DenonDeviceService:1</code></pre>
+
+  <p>Key headers:</p>
+  <ul>
+    <li><code>MAN</code>: SSDP discover protocol identifier</li>
+    <li><code>MX</code>: Maximum wait time (seconds) — the AVR waits 0–3 seconds before responding</li>
+    <li><code>ST</code>: Search target — <code>urn:schemas-denon-com:device:ACT-DenonDeviceService:1</code> specifically targets Denon/Marantz devices</li>
+  </ul>
+
+  <h3>Parsing Responses</h3>
+
+  <p>AVR responses include a <code>LOCATION</code> header containing the device's XML description URL (which contains the AVR's IP address):</p>
+
+<pre><code>NOTIFY * HTTP/1.1
+LOCATION: http://192.168.1.100:8080/description.xml
+SERVER: Linux/2.6 UPnP/1.0 Denon/1.0
+USN: uuid:Denon-ACT-DenonDeviceService:1
+NT: urn:schemas-denon-com:device:ACT-DenonDeviceService:1</code></pre>
+
+  <p>The <code>LOCATION</code> URL's hostname is the AVR's IP address. The server parses this and returns it to the browser for Telnet connection.</p>
+
+  <h3>ssdpDiscover() Implementation</h3>
+
+<pre><code>function ssdpDiscover() {
+  return new Promise((resolve, reject) => {
+    const client = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    const timeout = setTimeout(() => {
+      client.close();
+      resolve([]);   // Return empty on timeout (not an error)
+    }, 4000);
+
+    const results = [];
+
+    client.on('message', (msg, rinfo) => {
+      const str = msg.toString();
+      // Filter for Denon/Marantz devices
+      if (str.includes('Denon') || str.includes('Marantz') ||
+          str.includes('ACT-DenonDevice')) {
+        const locationMatch = str.match(/LOCATION:\s*(.+)/i);
+        results.push({
+          ip:       rinfo.address,
+          location: locationMatch ? locationMatch[1].trim() : null,
+          server:   str.match(/SERVER:\s*(.+)/i)?.[1].trim(),
+          usn:      str.match(/USN:\s*(.+)/i)?.[1].trim(),
+        });
+      }
+    });
+
+    client.bind(() => {
+      client.setBroadcast(true);
+      const search = [
+        'M-SEARCH * HTTP/1.1',
+        'HOST: 239.255.255.250:1900',
+        'MAN: "ssdp:discover"',
+        'MX: 3',
+        'ST: urn:schemas-denon-com:device:ACT-DenonDeviceService:1',
+        '', ''
+      ].join('\r\n');
+
+      client.send(search, 0, search.length, 1900, '239.255.255.250');
+    });
+
+    client.on('error', (err) => {
+      clearTimeout(timeout);
+      client.close();
+      reject(err);
+    });
+  });
+}</code></pre>
+
+  <div class="info-box">
+    <div class="box-title">Timeout Is Normal</div>
+    <p>The 4-second timeout is intentional — after sending the M-SEARCH, the function waits up to 3 seconds (matching <code>MX: 3</code>) for AVRs to respond, then returns whatever it found. An empty array means no Denon/Marantz devices were found on the network.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 8. CALIBRATION FILE FORMATS                                           -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="calibration-formats">
+  <h2>8. Calibration File Formats</h2>
+
+  <h3>.oca Format (A1 Evo Native)</h3>
+
+  <p><code>.oca</code> is A1 Evo AcoustiX's own calibration format — a JSON file that stores the complete calibration state: AVR info, per-channel PEQ filters, distances, trims, target curve name, and all form settings. This is the file format used for save/load in the app.</p>
+
+  <h4>Full .oca Structure</h4>
+
+<div class="json-block">{
+  <span class="key">"version"</span>: <span class="str">"1.0"</span>,
+  <span class="key">"appVersion"</span>: <span class="str">"3.0"</span>,
+  <span class="key">"createdAt"</span>: <span class="str">"2026-04-23T10:30:00.000Z"</span>,
+  <span class="key">"avr"</span>: {
+    <span class="key">"host"</span>: <span class="str">"192.168.1.100"</span>,
+    <span class="key">"model"</span>: <span class="str">"Denon X3800H"</span>,
+    <span class="key">"hasHeightSpeakers"</span>: <span class="bool">true</span>
+  },
+  <span class="key">"channels"</span>: [
+    {
+      <span class="key">"channel"</span>: <span class="str">"FL"</span>,
+      <span class="key">"distance_mm"</span>: <span class="num">3450</span>,
+      <span class="key">"trim_x10"</span>: <span class="num">0</span>,
+      <span class="key">"filters"</span>: [
+        { <span class="key">"freq"</span>: <span class="num">63.5</span>, <span class="key">"gain"</span>: <span class="num">-8.2</span>, <span class="key">"q"</span>: <span class="num">1.25</span> },
+        { <span class="key">"freq"</span>: <span class="num">125.0</span>, <span class="key">"gain"</span>: <span class="num">4.1</span>, <span class="key">"q"</span>: <span class="num">2.0</span> }
+      ]
+    },
+    {
+      <span class="key">"channel"</span>: <span class="str">"SW"</span>,
+      <span class="key">"distance_mm"</span>: <span class="num">4100</span>,
+      <span class="key">"trim_x10"</span>: <span class="num">10</span>,
+      <span class="key">"filters"</span>: <span class="punct">[...]</span>
+    }
+  ],
+  <span class="key">"targetCurve"</span>: <span class="str">"acoustix.txt"</span>,
+  <span class="key">"settings"</span>: {
+    <span class="key">"targetCurveFile"</span>: <span class="str">"acoustix.txt"</span>,
+    <span class="key">"maxFilters"</span>: <span class="num">6</span>,
+    <span class="key">"maxCut"</span>: <span class="num">12</span>,
+    <span class="key">"maxBoost"</span>: <span class="num">6</span>,
+    <span class="key">"subwooferOnly"</span>: <span class="bool">false</span>
+  }
+}</div>
+
+  <h3>.ady Format (Denon MultEQ)</h3>
+
+  <p><code>.ady</code> is Denon's native export format from the MultEQ Editor app (see Section 2d above). It contains measurements and detected PEQ filters from Denon's own calibration run. The app imports these for reference or as a starting point.</p>
+
+  <h3>Save/Load Flow</h3>
+
+<div class="step-flow">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <div class="step-title">Serialize Form State</div>
+      <div class="step-desc">User fills in the A1 Evo settings form. <code>serializeFormToOca()</code> reads all form values (including checkboxes) into a plain object.</div>
+      <div class="step-cmd"><code>buildOcaCalibration(avrInfo, formValues, channels) → OCA object</code></div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <div class="step-title">POST to Server</div>
+      <div class="step-desc">Browser POSTs <code>{name, data: ocaObject}</code> to <code>/api/calibration</code>. Server writes it as <code>calibrations/&lt;name&gt;.oca</code>.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <div class="step-title">Load from Disk</div>
+      <div class="step-desc">Browser GETs <code>/api/calibration/&lt;name&gt;</code>. Server reads the <code>.oca</code> JSON file and returns it.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <div class="step-title">Deserialize to Form</div>
+      <div class="step-desc"><code>deserializeOcaToForm(oca)</code> populates all form fields from the <code>.oca.settings</code> object. Channel-specific data (filters, distances, trims) is applied to each channel's card.</div>
+    </div>
+  </div>
+</div>
+
+  <h3>buildOcaCalibration() Implementation</h3>
+
+<pre><code>function buildOcaCalibration(avrInfo = {}, formValues = {}, channels = []) {
+  return {
+    version:    '1.0',
+    appVersion: '3.0',
+    createdAt:  new Date().toISOString(),
+    avr: {
+      host:             avrInfo.host || '',
+      model:            avrInfo.model || '',
+      hasHeightSpeakers: avrInfo.hasHeightSpeakers || false,
+    },
+    channels,             // [{channel, distance_mm, trim_x10, filters}, ...]
+    targetCurve: formValues.targetCurve || 'acoustix.txt',
+    settings:    formValues,
+  };
+}</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 9. END-TO-END FLOW DIAGRAM                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="end-to-end">
+  <h2>9. End-to-End Workflow</h2>
+
+  <p>Here is the complete step-by-step workflow from AVR discovery to saved calibration:</p>
+
+<div class="step-flow">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <div class="step-title">SSDP AVR Discovery</div>
+      <div class="step-desc">User clicks "Discover AVR". Browser calls <code>POST /api/avr/discover</code>. Server sends M-SEARCH UDP multicast. AVRs respond with LOCATION headers containing their IPs.</div>
+      <div class="step-cmd">ssdpDiscover() → [{ip: "192.168.1.100", ...}, ...]</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <div class="step-title">Connect via Telnet</div>
+      <div class="step-desc">User selects an AVR IP and clicks "Connect". Server opens raw TCP socket to AVR port 23. AVR sends telnet negotiation bytes. Connection state → <strong>ready</strong>.</div>
+      <div class="step-cmd">POST /api/avr/connect {host: "192.168.1.100"} → {success: true}</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <div class="step-title">Load Measurement</div>
+      <div class="step-desc">User loads a measurement from REW (.txt file export) or Denon MultEQ Editor (.ady file). The browser parses the file and stores the response data for each channel. Alternatively, REW is used to make live measurements.</div>
+      <div class="step-cmd">parseAdyFile(adyJson) → {channels: [{name, responseData, filters}]}</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <div class="step-title">Select Target Curve</div>
+      <div class="step-desc">User picks a target curve from the dropdown (e.g., "acoustix.txt"). The curve file is loaded from <code>GET /api/target-curves/:name</code>. The curve defines the desired frequency response shape.</div>
+      <div class="step-cmd">GET /api/target-curves/acoustix.txt → "20\t-3.0\n1000\t0.0\n..."</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <div class="step-title">REW Optimizes Filters</div>
+      <div class="step-desc">For each channel: (a) Import impulse response via <code>/api/rew/eq/import-impulse</code>. (b) Run target matching via <code>/api/rew/eq/match-target</code>. REW returns PEQ filter parameters (freq, gain, Q). (c) Optionally export coefficients via <code>/api/rew/eq/export-raw</code>.</div>
+      <div class="step-cmd">rewMatchTarget("FL", "acoustix.txt") → {filters: [{freq:63.5,gain:-8.2,q:1.25},...]}</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <div class="step-title">Transfer Filters to AVR</div>
+      <div class="step-desc">Server sends PEQ commands to the AVR via Telnet, one filter at a time with small delays between. Each command follows the MSSV format.</div>
+      <div class="step-cmd">MSSVFL=63.5Hz,-8.2dB,Q=1.25\r</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">7</div>
+    <div class="step-body">
+      <div class="step-title">Set Speaker Distances</div>
+      <div class="step-desc">Server sends MSD commands for each channel, encoding the distance in millimeters.</div>
+      <div class="step-cmd">MSDFL3450\r  (3450 mm = 3.45 m)</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">8</div>
+    <div class="step-body">
+      <div class="step-title">Set Channel Trims</div>
+      <div class="step-desc">Server sends MST commands for each channel, encoding trim in 0.1 dB units.</div>
+      <div class="step-cmd">MSTFL105\r  (+10.5 dB)</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">9</div>
+    <div class="step-body">
+      <div class="step-title">Save Calibration as .oca</div>
+      <div class="step-desc">Browser serializes the complete state (AVR info, channels, filters, distances, trims, settings) into an .oca JSON file and POSTs it to the server. Server writes it to <code>calibrations/&lt;name&gt;.oca</code>.</div>
+      <div class="step-cmd">POST /api/calibration {name: "Movie Night", data: {...}}</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 10. SERVER API ROUTES                                                -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="api-routes">
+  <h2>10. Server API Routes</h2>
+
+  <p>The Node.js Express-style router in <code>server.js</code> handles all HTTP API calls. The server is a custom HTTP server (not Express) but follows Express routing patterns.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Route</th><th>Method</th><th>Handler</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>/api/avr/discover</code></td>
+          <td>POST</td>
+          <td><code>ssdpDiscover()</code></td>
+          <td>Send SSDP M-SEARCH multicast. Returns array of discovered AVRs with IP, LOCATION, SERVER, USN.</td>
+        </tr>
+        <tr>
+          <td><code>/api/avr/connect</code></td>
+          <td>POST</td>
+          <td><code>avrConnect(body.host)</code></td>
+          <td>Open raw TCP Telnet connection to AVR at <code>host:23</code>. 5s timeout. Returns <code>{success: true, host, port}</code>.</td>
+        </tr>
+        <tr>
+          <td><code>/api/avr/disconnect</code></td>
+          <td>POST</td>
+          <td><code>avrDisconnect()</code></td>
+          <td>Destroy the Telnet socket. Returns <code>{disconnected: true}</code>.</td>
+        </tr>
+        <tr>
+          <td><code>/api/avr/command</code></td>
+          <td>POST</td>
+          <td><code>avrSendCommand(body.command)</code></td>
+          <td>Send raw command to AVR over Telnet. 5s timeout. Returns <code>{success: true, response}</code>.</td>
+        </tr>
+        <tr>
+          <td><code>/api/avr/query</code></td>
+          <td>POST</td>
+          <td><code>avrSendCommand('MSQ' + body.channel)</code></td>
+          <td>Query PEQ filter state for a channel. Body: <code>{channel: "FL"}</code>.</td>
+        </tr>
+        <tr>
+          <td><code>/api/rew/*</code></td>
+          <td>GET / POST</td>
+          <td><code>proxyRew(req, suffix, body)</code></td>
+          <td>Proxy all requests to REW API at <code>localhost:4735</code>. Strips <code>/api/rew</code> prefix before forwarding.</td>
+        </tr>
+        <tr>
+          <td><code>/api/calibration</code></td>
+          <td>GET</td>
+          <td><code>listCalibrations()</code></td>
+          <td>List all <code>.oca</code> files in <code>calibrations/</code>. Returns <code>{success: true, calibrations: [{name, file}, ...]}</code>.</td>
+        </tr>
+        <tr>
+          <td><code>/api/calibration</code></td>
+          <td>POST</td>
+          <td><code>saveCalibration(body.name, body.data)</code></td>
+          <td>Write calibration to <code>calibrations/&lt;name&gt;.oca</code>. Body: <code>{name, data: ocaObject}</code>.</td>
+        </tr>
+        <tr>
+          <td><code>/api/calibration/:name</code></td>
+          <td>GET</td>
+          <td><code>loadCalibration(name)</code></td>
+          <td>Read and return <code>calibrations/&lt;name&gt;.oca</code>. Returns full OCA JSON object.</td>
+        </tr>
+        <tr>
+          <td><code>/api/target-curves</code></td>
+          <td>GET</td>
+          <td><code>listTargetCurves()</code></td>
+          <td>List all curve files in <code>target_curves/</code>. Returns <code>{success: true, curves: [{name, file}, ...]}</code>.</td>
+        </tr>
+        <tr>
+          <td><code>/api/target-curves/:name</code></td>
+          <td>GET</td>
+          <td><code>getTargetCurve(name)</code></td>
+          <td>Return raw text content of the curve file (frequency/gain pairs).</td>
+        </tr>
+        <tr>
+          <td><code>/api/parse-ady</code></td>
+          <td>POST</td>
+          <td>JSON parse <code>body.adyData</code></td>
+          <td>Parse and validate a Denon .ady JSON file. Returns <code>{success: true, data: parsed}</code> or error.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Static File Serving</h3>
+
+  <p>Any request that doesn't match an API route is served as a static file from the server's directory. This includes the HTML, CSS, and JavaScript for the SPA:</p>
+
+  <ul>
+    <li><code>/</code> or <code>/index.html</code> → <code>index.html</code></li>
+    <li><code>/css/a1evo.css</code> → <code>css/a1evo.css</code></li>
+    <li><code>/js/a1evo-app.js</code> → <code>js/a1evo-app.js</code></li>
+    <li><code>/calibrations/myname.oca</code> → downloadable file</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- 11. BAUD RATES AND LIMITATIONS                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="limitations">
+  <h2>11. Baud Rates and Limitations</h2>
+
+  <h3>MultEQ XT32 Communication Speed</h3>
+
+  <p>The Denon X3800H's Telnet interface communicates at <strong>19200 baud</strong> (19.2 kbps). This is a relatively slow serial speed by modern standards, which has direct implications:</p>
+
+  <ul>
+    <li>Each command string is small (~30–50 bytes), but the AVR's response processing adds latency</li>
+    <li>Sending many PEQ commands in rapid succession can cause the AVR to drop or corrupt responses</li>
+    <li>The 50ms inter-command delay in <code>setPEQBatch()</code> is specifically chosen to avoid overflow</li>
+  </ul>
+
+  <h3>PEQ Filter Limits</h3>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Channel Type</th><th>Max PEQ Filters</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Regular speakers (FL, FR, C, SL, SR, etc.)</td><td><strong>6</strong></td><td>Per channel</td></tr>
+        <tr><td>Subwoofer (SW)</td><td><strong>7</strong></td><td>6 + 1 extra for deep bass</td></tr>
+        <tr><td>Height channels (FD, FS, TM, RL, RR)</td><td><strong>6</strong></td><td>Same as regular</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Filter Transfer Strategy</h3>
+
+  <p>Because of the 19200 baud limit and 5-second command timeout, the app transfers filters in batches with inter-command delays:</p>
+
+<pre><code>async function setPEQBatch(channel, filters) {
+  const results = [];
+  for (const f of filters) {
+    const r = await setPEQ(channel, f.freq, f.gain, f.q);
+    results.push(r);
+    // 50ms delay prevents AVR command buffer overflow
+    await new Promise(r => setTimeout(r, 50));
+  }
+  return results;
+}</code></pre>
+
+  <div class="warn-box">
+    <div class="box-title">Why Small Batches with Delays?</div>
+    <p>If you send commands too fast, the AVR's 19200-baud input buffer overflows and the command is truncated or ignored. The 5-second timeout catches this case — the command hangs and eventually times out, leaving the filter in an unknown state. The 50ms delay between commands avoids this reliably.</p>
+  </div>
+
+  <h3>Other Known Limitations</h3>
+
+  <ul>
+    <li><strong>Single Telnet connection:</strong> The server maintains one in-memory socket. If the connection drops mid-transfer, the user must reconnect manually.</li>
+    <li><strong>REW must be running:</strong> The REW API (port 4735) only responds when REW is actively running on the same machine. There's no wake-on-LAN for REW.</li>
+    <li><strong>Subwoofer crossover:</strong> The crossover frequency (e.g., 80 Hz) is set by the AVR independently and is not managed by this app.</li>
+    <li><strong>Port 18443:</strong> If this port is busy, the server auto-increments to 18444, 18445, etc. Check the console output for the actual URL.</li>
+    <li><strong>No HTTPS:</strong> The server runs over plain HTTP on a local network. This is fine for local use but should not be exposed to the internet.</li>
+  </ul>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────────────── -->
+<footer style="margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.82rem; text-align: center;">
+  A1 Evo AcoustiX — Architecture Documentation · Denon X3800H + REW Integration
+</footer>
+
+</div><!-- .container -->
+
+</body>
+</html>

@@ -1,0 +1,561 @@
+/**
+ * A1 Evo AcoustiX — Amber/Gold Theme CSS
+ * Color tokens from A1EvoAcoustiX_embedded.html
+ */
+
+:root {
+  --a1-primary: #ffb300;
+  --a1-primary-bright: #ffca28;
+  --a1-primary-dim: rgba(255, 179, 0, 0.15);
+  --a1-bg-start: #212121;
+  --a1-bg-end: #1a1a1a;
+  --a1-card-bg: #263238;
+  --a1-panel-bg: #1c2429;
+  --a1-text-main: #eceff1;
+  --a1-text-muted: #90a4ae;
+  --a1-track-bg: #37474f;
+  --a1-border-light: rgba(255, 255, 255, 0.08);
+}
+
+/* ─── A1 Evo Tab ─────────────────────────────────────────── */
+#tab-a1evo {
+  display: none;
+}
+#tab-a1evo.active {
+  display: block;
+}
+
+/* ─── Tab Bar ─────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+  padding: 0.6rem 1.5rem;
+  background: var(--surface);
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.tab-btn:hover {
+  color: var(--text);
+  background: var(--surface2);
+}
+
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.tab-btn.active-a1 {
+  color: var(--a1-primary);
+  border-bottom-color: var(--a1-primary);
+}
+
+/* ─── A1 Evo Layout ──────────────────────────────────────── */
+.a1evo-container {
+  width: 100%;
+  max-width: 1400px;
+  background: linear-gradient(145deg, #2d3940, #263238);
+  border-radius: 12px;
+  padding: 25px 35px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1);
+  border: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 2rem;
+}
+
+.a1evo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  border-bottom: 2px solid var(--a1-border-light);
+  padding-bottom: 15px;
+}
+
+.a1evo-header-left { display: flex; align-items: baseline; gap: 15px; }
+
+.a1evo-title {
+  color: var(--a1-text-main);
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.a1evo-title span { color: var(--a1-primary); font-weight: 300; }
+
+.a1evo-header-controls { display: flex; align-items: center; gap: 15px; }
+
+.a1evo-support-btn {
+  display: flex; align-items: center; gap: 6px;
+  text-decoration: none;
+  color: var(--a1-primary);
+  border: 1px solid rgba(255, 179, 0, 0.3);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+  background: rgba(0,0,0,0.2);
+}
+
+.a1evo-support-btn:hover {
+  background: var(--a1-primary-dim);
+  box-shadow: 0 0 12px rgba(255, 179, 0, 0.2);
+  border-color: var(--a1-primary);
+  transform: translateY(-1px);
+}
+
+.a1evo-main-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 30px;
+}
+
+.a1evo-column {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 15px;
+  border: 1px solid rgba(255,255,255,0.03);
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+}
+
+.a1evo-section-title {
+  color: var(--a1-primary);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+}
+
+.a1evo-section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--a1-border-light); margin-left: 15px;
+}
+
+/* ─── A1 Evo Form Groups ──────────────────────────────────── */
+.a1evo-form-group {
+  background: var(--a1-panel-bg);
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border-left: 3px solid transparent;
+  transition: border-left-color 0.3s, background 0.3s;
+}
+
+.a1evo-form-group:hover {
+  background: #232d33;
+  border-left-color: var(--a1-primary);
+}
+
+.a1evo-form-group.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  background: #151a1e;
+  border-left-color: #455a64;
+}
+
+.a1evo-form-group label {
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--a1-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.a1evo-label-with-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.a1evo-locked-badge {
+  font-size: 9px;
+  color: #000;
+  background: var(--a1-primary);
+  padding: 2px 4px;
+  border-radius: 2px;
+  margin-right: 8px;
+  font-weight: bold;
+  display: none;
+}
+
+.a1evo-form-group.locked-active .a1evo-locked-badge {
+  display: inline-block;
+}
+
+/* ─── A1 Evo Select ────────────────────────────────────────── */
+.a1evo-select {
+  width: 100%;
+  padding: 8px 12px;
+  background: #121212;
+  border: 1px solid #455a64;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 12px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.a1evo-select:focus {
+  border-color: var(--a1-primary);
+  outline: none;
+}
+
+/* ─── A1 Evo Toggle Switch ────────────────────────────────── */
+.a1evo-toggle {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 22px;
+}
+
+.a1evo-toggle input { display: none; }
+
+.a1evo-slider-round {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #37474f;
+  transition: .2s;
+  border-radius: 2px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.a1evo-slider-round:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: #90a4ae;
+  transition: .2s;
+  border-radius: 1px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.a1evo-toggle input:checked + .a1evo-slider-round {
+  background-color: #2e3d44;
+}
+
+.a1evo-toggle input:checked + .a1evo-slider-round:before {
+  transform: translateX(20px);
+  background-color: var(--a1-primary);
+  box-shadow: 0 0 10px var(--a1-primary);
+}
+
+/* ─── A1 Evo Range Sliders ───────────────────────────────── */
+.a1evo-range-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.a1evo-range-group output {
+  color: var(--a1-primary-bright);
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  background: #000;
+  padding: 2px 6px;
+  border-radius: 2px;
+  border: 1px solid #37474f;
+}
+
+.a1evo-single-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  background: #121212;
+  border-radius: 3px;
+  outline: none;
+  margin-top: 5px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
+  border: 1px solid #37474f;
+}
+
+.a1evo-single-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 22px;
+  background: linear-gradient(to bottom, #546e7a, #37474f);
+  border: 1px solid #78909c;
+  border-radius: 2px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  margin-top: -1px;
+}
+
+.a1evo-single-slider:hover::-webkit-slider-thumb {
+  background: linear-gradient(to bottom, var(--a1-primary), #ff8f00);
+  border-color: #fff;
+}
+
+/* ─── A1 Evo Crossover Slider ───────────────────────────── */
+.a1evo-crossover-slider {
+  position: relative;
+  height: 24px;
+  margin-top: 5px;
+}
+
+.a1evo-crossover-slider .track {
+  position: absolute;
+  width: 100%;
+  height: 6px;
+  background: #121212;
+  border-radius: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
+  border: 1px solid #37474f;
+}
+
+.a1evo-crossover-slider .track-infill {
+  position: absolute;
+  height: 6px;
+  background: var(--a1-primary);
+  box-shadow: 0 0 8px rgba(255, 179, 0, 0.4);
+  border-radius: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.a1evo-crossover-slider input[type="range"] {
+  -webkit-appearance: none;
+  position: absolute;
+  width: 100%;
+  background: none;
+  pointer-events: none;
+  z-index: 3;
+  margin: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.a1evo-crossover-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 22px;
+  background: #cfd8dc;
+  cursor: pointer;
+  border-radius: 2px;
+  border: 1px solid #000;
+  pointer-events: auto;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+.a1evo-crossover-slider input[type="range"]::-webkit-slider-thumb:hover {
+  background: #fff;
+  transform: scale(1.1);
+}
+
+/* ─── A1 Evo Checkbox Group ──────────────────────────────── */
+.a1evo-checkbox-group label {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 15px;
+  font-size: 11px;
+  color: var(--a1-text-main);
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.a1evo-checkbox-group label:hover { opacity: 1; }
+
+.a1evo-checkbox-group input[type="checkbox"] {
+  margin-right: 8px;
+  accent-color: var(--a1-primary);
+}
+
+/* ─── A1 Evo Button Group ────────────────────────────────── */
+.a1evo-button-group {
+  text-align: right;
+  margin-top: 20px;
+  border-top: 1px solid var(--a1-border-light);
+  padding-top: 20px;
+}
+
+.a1evo-save-btn {
+  padding: 14px 32px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  background: linear-gradient(to bottom, var(--a1-primary), #ff8f00);
+  color: #263238;
+  box-shadow: 0 4px 0 #c46e00, 0 10px 20px rgba(0,0,0,0.4);
+  transition: all 0.2s;
+}
+
+.a1evo-save-btn:hover {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #c46e00, 0 5px 10px rgba(0,0,0,0.4);
+  filter: brightness(1.1);
+}
+
+.a1evo-save-btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 #c46e00, inset 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* ─── A1 Evo Chart Canvas ────────────────────────────────── */
+.a1evo-chart-canvas {
+  filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
+}
+
+/* ─── A1 Evo Tooltip ─────────────────────────────────────── */
+.a1evo-tooltip-container { position: relative; display: inline-block; }
+
+.a1evo-tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  bottom: 130%;
+  left: 50%;
+  transform: translateX(-50%) translateY(5px);
+  background: #1a1a1a;
+  color: #fff;
+  padding: 10px 15px;
+  border-radius: 4px;
+  width: 260px;
+  font-size: 11px;
+  line-height: 1.5;
+  border: 1px solid var(--a1-primary);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+  transition: all 0.2s ease;
+  z-index: 9999;
+  white-space: normal;
+  text-align: center;
+}
+
+.a1evo-tooltip-container:hover .a1evo-tooltip-text {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.a1evo-tooltip-text::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: var(--a1-primary) transparent transparent transparent;
+}
+
+/* ─── AVR Status Badge ───────────────────────────────────── */
+.a1evo-avr-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--a1-text-muted);
+}
+
+.a1evo-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.a1evo-status-dot.connected {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+
+.a1evo-discover-btn {
+  padding: 8px 16px;
+  background: linear-gradient(to bottom, var(--a1-primary), #ff8f00);
+  color: #263238;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 0 #c46e00;
+  transition: all 0.2s;
+}
+
+.a1evo-discover-btn:hover {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #c46e00;
+}
+
+/* ─── A1 Evo Subwoofer Panel ─────────────────────────────── */
+.a1evo-subwoofer-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* ─── A1 Evo Loading / Progress ──────────────────────────── */
+.a1evo-progress {
+  display: none;
+  background: var(--a1-panel-bg);
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-top: 12px;
+  border: 1px solid rgba(255, 179, 0, 0.2);
+}
+
+.a1evo-progress.visible {
+  display: block;
+}
+
+.a1evo-progress-bar {
+  height: 4px;
+  background: #121212;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.a1evo-progress-fill {
+  height: 100%;
+  background: var(--a1-primary);
+  transition: width 0.3s;
+  box-shadow: 0 0 8px rgba(255, 179, 0, 0.4);
+}
+
+/* ─── Responsive Adjustments ─────────────────────────────── */
+@media (max-width: 900px) {
+  .a1evo-main-content {
+    grid-template-columns: 1fr;
+  }
+  .a1evo-container {
+    padding: 15px 20px;
+  }
+}
