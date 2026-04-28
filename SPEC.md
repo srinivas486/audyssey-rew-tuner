@@ -1,6 +1,6 @@
-# A1 Evo AcoustiX — Reverse Engineering Spec
+# A1 Evo AcoustiX - Reverse Engineering Spec
 
-> **Status:** ✅ Transfer protocol fully reverse-engineered and verified working  
+> **Status:** ✅ Transfer protocol fully reverse-engineered and verified working
 > **Last updated:** 2026-04-24
 
 ## Binary Information
@@ -38,13 +38,13 @@ a1-evo-acoustix/
 
 ---
 
-## Transfer Protocol — CONFIRMED ✅
+## Transfer Protocol - CONFIRMED ✅
 
 The filter transfer uses a **binary TCP protocol on port 1256** (not Telnet port 23).
 
 ### Verified Message Types
 
-#### 1. SET_SETDAT — Configuration (distances, trims, crossovers)
+#### 1. SET_SETDAT - Configuration (distances, trims, crossovers)
 ```
 54 xx xx xx 08 53 45 54 5f 53 45 54 44 41 54 00 [[4 bytes meta]] [[channel]] [[SR]]
 [[...config data...]]
@@ -58,7 +58,7 @@ The filter transfer uses a **binary TCP protocol on port 1256** (not Telnet port
 - **SR:** 1 byte (sample rate code)
 - **Config data:** variable
 
-#### 2. SET_COEFDT — Filter Coefficients (biquad IIR coefficients)
+#### 2. SET_COEFDT - Filter Coefficients (biquad IIR coefficients)
 ```
 54 xx xx xx 08 53 45 54 5f 43 4f 45 46 44 54 00 [[4 bytes meta]] [[channel]] [[SR]]
 [[126 × float32 coefficients...]]
@@ -104,7 +104,7 @@ Bytes 22-525: 126 float32 coefficients × 4 bytes (LE float32)
 | 9  | FDL  | Front Dolby Left |
 | 10 | FDR  | Front Dolby Right |
 
-### Coefficient Encoding — CONFIRMED ✅
+### Coefficient Encoding - CONFIRMED ✅
 - **Byte order:** Little-endian IEEE 754 float32
 - **Offset:** TCP payload offset 22 (not 24)
 - **Verification:** OCA filter[0] LE bytes found at TCP offset 22 of retransmitted blocks in pcap
@@ -119,7 +119,7 @@ Bytes 22-525: 126 float32 coefficients × 4 bytes (LE float32)
 
 ---
 
-## AVR Communication — Two Ports
+## AVR Communication - Two Ports
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
@@ -129,11 +129,27 @@ Bytes 22-525: 126 float32 coefficients × 4 bytes (LE float32)
 ### Telnet Commands (Port 23)
 | Command | Purpose | Example |
 |---------|---------|---------|
+| `ZM?` | Query power status | Returns `ZMON` or `ZMOFF` |
+| `ZMON` | Power on AVR | — |
+| `ZMOFF` | Power off AVR | — |
+| `SPPR ?` | Query active Audyssey preset | Returns `SPPR 1` or `SPPR 2` |
+| `SPPR <n>` | Switch to preset 1 or 2 | `SPPR 2` |
+| `PSSWL OFF` | Subwoofer level OFF (old models) | Sent ×2 |
+| `SSSWM <mode>` | Bass mode (old models) | `SSSWM LFE`, `SSSWM L+M` |
+| `SSSWO <mode>` | Bass mode (new models) | `SSSWO LFE`, `SSSWO L+M` |
+| `SSLFL <freq>` | LPF for LFE crossover | `SSLFL 120` (zero-padded) |
+| `SSCFRFRO FUL` | Front speakers full-range (new models) | — |
+| `SSBELFRO <freq>` | Front bass extraction freq (new models) | `SSBELFRO 080` |
 | `MSSV<ch>=<freq>Hz,<gain>dB,Q=<q>` | Set PEQ filter | `MSSVFL=63Hz,-3.5dB,Q=1.2` |
 | `MSD<ch><distance_mm>` | Set distance (mm) | `MSDFL3000` |
 | `MST<ch><trim_x10>` | Set trim (0.1 dB) | `MSTFL105` = +10.5 dB |
-| `ZM?AUDYON` | Apply calibration | - |
-| `MSSV?<ch>` | Query filter | - |
+| `ZM?AUDYON` | Apply calibration | — |
+| `MSSV?<ch>` | Query filter | — |
+
+### HTTP Endpoint (port 80)
+| URL | Purpose |
+|-----|---------|
+| `/goform/formMainZone_MainZoneXml.xml` | Model name discovery via `<ModelName>` and `<FriendlyName>` tags |
 
 ### Binary Protocol Commands (Port 1256)
 | Command | Purpose |
@@ -146,7 +162,7 @@ Bytes 22-525: 126 float32 coefficients × 4 bytes (LE float32)
 
 ## File Formats
 
-### .oca — A1 Evo Calibration Format
+### .oca - A1 Evo Calibration Format
 ```json
 {
   "version": "1.0",
@@ -169,7 +185,7 @@ Bytes 22-525: 126 float32 coefficients × 4 bytes (LE float32)
 - Coefficients stored as big-endian IEEE 754 float32 in JSON
 - Convert to little-endian for SET_COEFDT transfer
 
-### .ady — Denon MultEQ Editor Export
+### .ady - Denon MultEQ Editor Export
 ```json
 {
   "detectedChannels": [{
@@ -192,7 +208,7 @@ Bytes 22-525: 126 float32 coefficients × 4 bytes (LE float32)
 4. Wait CoefWaitTime ms
 5. Receive ACKs for config
 6. Send SET_COEFDT coefficient messages (126 coefs per msg, all SRs)
-7. Done — power cycle AVR or ZM?AUDYON to apply
+7. Done - power cycle AVR or ZM?AUDYON to apply
 ```
 
 ### Biquad IIR Coefficients
@@ -224,10 +240,10 @@ Use the existing `index.html` (browser SPA in this workspace) as the base:
 5. Integrate REW API calls for measurement/EQ matching
 
 ### Key missing pieces in existing `index.html`:
-- **Binary TCP client** — no filter transfer capability
-- **SSDP discovery** — AVR auto-discovery
-- **Binary packet builder** — for filter transfer
-- **`.oca` format support** — calibration file save/load
+- **Binary TCP client** - no filter transfer capability
+- **SSDP discovery** - AVR auto-discovery
+- **Binary packet builder** - for filter transfer
+- **`.oca` format support** - calibration file save/load
 
 ### Implementation order:
 1. Binary TCP client (simple `net.connect` to port 1256)
@@ -246,11 +262,11 @@ This spec is for **personal use only** per the binary's EULA. The author (OCA) h
 
 ## Future: .eqx Calibration Format
 
-**.eqx** is the project's open calibration format — a clean, extensible JSON format designed to hold EQ data from any measurement source, independently of any AVR-specific binary protocol.
+**.eqx** is the project's open calibration format - a clean, extensible JSON format designed to hold EQ data from any measurement source, independently of any AVR-specific binary protocol.
 
 ### Design Rationale
-- OCA is tied to the A1 Evo/AcoustiX ecosystem — useful but opaque
-- .eqx is AVR-agnostic — convert to OCA for Denon, or to other formats for other AVR brands
+- OCA is tied to the A1 Evo/AcoustiX ecosystem - useful but opaque
+- .eqx is AVR-agnostic - convert to OCA for Denon, or to other formats for other AVR brands
 - Future-proof: generated from room measurements (REW, ARTA, etc.), not just from A1 Evo
 
 ### .eqx Format (v1.0)
@@ -271,7 +287,7 @@ This spec is for **personal use only** per the binary's EULA. The author (OCA) h
       { "freq": 63, "gain": -2.5, "Q": 1.2, "type": "PEQ", "sr": 48000 },
       { "freq": 125, "gain": 1.5, "Q": 1.4, "type": "PEQ", "sr": 48000 }
     ],
-    "filter": [ /* raw IIR biquad coefficients — optional */ ],
+    "filter": [ /* raw IIR biquad coefficients - optional */ ],
     "sr": 48000
   }],
   "subwoofer": {
@@ -308,3 +324,24 @@ This spec is for **personal use only** per the binary's EULA. The author (OCA) h
 - [ ] `.eqx` → ASCII Telnet commands (PEQ via port 23)
 - [ ] REW txt/csv measurement → `.eqx`
 - [ ] `.eqx` → generic JSON for other AVR brands (Pioneer, Yamaha, etc.)
+
+---
+
+## SET_COEFDT Format - Historical Bug (NOW RESOLVED)
+
+> ⚠️ **NOTE:** Both `transfer.js` and `oca_transfer.py` now use the correct format. The old `transfer.js` `generatePacketsForTransfer` function incorrectly used `buildAvrPacket` architecture (designed for JSON commands like SET_SETDAT). SET_COEFDT requires a completely different direct binary format. This has been corrected.
+
+| Packet Element | Old transfer.js (WRONG) | Correct Format |
+|----------------|---------------------|---------------------------|
+| After marker | 2-byte length + seq + lastSeq | 3-byte LE counter |
+| Checksum | Yes (1 byte) | **NO** |
+| Meta field | Variable (tc+sr+ch+00) | Fixed (02 00 01 00) |
+| Channel/SR position | In param header | Direct at offsets 22-23 |
+| Coefficient offset | 29 (first), 24 (mid/last) | Always 24 |
+| Param length | Variable (5+n*4) | Fixed (504) |
+
+### Related Files
+- `ANALYSIS.md` - Full protocol analysis with pcap evidence
+- `oca_transfer.py` - Working Python implementation (reference)
+- `acoustix_transfer_1777004735377.pcapng` - PCAP of successful transfer
+- `COMMAND_INVENTORY.md` - Full command reference for both ports
