@@ -308,3 +308,24 @@ This spec is for **personal use only** per the binary's EULA. The author (OCA) h
 - [ ] `.eqx` → ASCII Telnet commands (PEQ via port 23)
 - [ ] REW txt/csv measurement → `.eqx`
 - [ ] `.eqx` → generic JSON for other AVR brands (Pioneer, Yamaha, etc.)
+
+---
+
+## SET_COEFDT Format — Historical Bug (NOW RESOLVED)
+
+> ⚠️ **NOTE:** Both `transfer.js` and `oca_transfer.py` now use the correct format. The old `transfer.js` `generatePacketsForTransfer` function incorrectly used `buildAvrPacket` architecture (designed for JSON commands like SET_SETDAT). SET_COEFDT requires a completely different direct binary format. This has been corrected.
+
+| Packet Element | Old transfer.js (WRONG) | Correct Format |
+|----------------|---------------------|---------------------------|
+| After marker | 2-byte length + seq + lastSeq | 3-byte LE counter |
+| Checksum | Yes (1 byte) | **NO** |
+| Meta field | Variable (tc+sr+ch+00) | Fixed (02 00 01 00) |
+| Channel/SR position | In param header | Direct at offsets 22-23 |
+| Coefficient offset | 29 (first), 24 (mid/last) | Always 24 |
+| Param length | Variable (5+n*4) | Fixed (504) |
+
+### Related Files
+- `ANALYSIS.md` — Full protocol analysis with pcap evidence
+- `oca_transfer.py` — Working Python implementation (reference)
+- `acoustix_transfer_1777004735377.pcapng` — PCAP of successful transfer
+- `COMMAND_INVENTORY.md` — Full command reference for both ports
