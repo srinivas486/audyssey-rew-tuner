@@ -31,9 +31,10 @@ from rew_exporter import (
     clear_measurements_via_api,
 )
 from target_curve import (
-    generate_target_curve_from_ady,
-    export_target_curve_txt,
-    push_target_curve_via_api,
+    generate_all_speaker_targets,
+    generate_merged_target,
+    export_merged_target,
+    push_merged_target_via_api,
 )
 
 
@@ -138,36 +139,39 @@ def main() -> None:
     # --- Target curve mode ---
     if args.target_curve:
         print("Generating target curve from FL, C, FR channels...")
+        channel_responses = get_all_channels_freq_response(data)
         try:
-            freqs, spl = generate_target_curve_from_ady(data)
+            speaker_targets = generate_all_speaker_targets(channel_responses, None)
         except Exception as e:
             sys.stderr.write(f"Error generating target curve: {e}\n")
             sys.exit(1)
+        if not speaker_targets:
+            sys.stderr.write("No speaker channels (FL/C/FR) found in measurement file.\n")
+            sys.exit(1)
 
-        import datetime
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        curve_path = output_dir / f"target_curve_{timestamp}.txt"
 
-        print(f"Writing target curve to: {curve_path}")
-        ok = export_target_curve_txt(freqs, spl, curve_path)
+        print(f"Writing merged target curve ({len(speaker_targets)} channels)...")
+        freqs, merged_spl = generate_merged_target(speaker_targets)
+        ok = export_merged_target(freqs, merged_spl, output_dir)
         if not ok:
-            sys.stderr.write("Failed to write target curve file.\n")
+            sys.stderr.write("Failed to write merged target curve file.\n")
             sys.exit(1)
 
         if not args.no_push:
-            print(f"Pushing target curve to REW at {args.api_host}:{args.api_port}...")
-            pushed = push_target_curve_via_api(
-                curve_path,
+            print(f"Pushing merged target curve to REW at {args.api_host}:{args.api_port}...")
+            pushed = push_merged_target_via_api(
+                freqs, merged_spl,
                 host=args.api_host,
                 port=args.api_port,
             )
             if pushed:
-                print("Target curve loaded into REW ✓")
+                print("Merged target curve loaded into REW ✓")
             else:
-                sys.stderr.write("Failed to push target curve to REW.\n")
+                sys.stderr.write("Failed to push merged target curve to REW.\n")
                 sys.exit(1)
+        print(f"Merged target: {output_dir / 'merged_target.frd'}")
         return
 
     # --- Frequency response mode (default) ---
