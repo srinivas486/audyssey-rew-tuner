@@ -8,10 +8,13 @@ Usage::
                                      [--api-port 4735]
                                      [--no-export]     skip .frd file export
                                      [--no-push]       skip REW API push
+                                     [--ir]            push impulse response data (all channels)
 
-Example::
+Examples::
 
     python export_ady_to_rew.py test.ady --output-dir ./output
+    python export_ady_to_rew.py test.ady --ir           # push impulse response to REW
+    python export_ady_to_rew.py test.ady                 # push frequency response (default)
 """
 
 from __future__ import annotations
@@ -20,8 +23,13 @@ import argparse
 import sys
 from pathlib import Path
 
-from ady_parser import load_ady, get_all_channels_freq_response
-from rew_exporter import export_channel_frd, push_frequency_response_via_api
+from ady_parser import load_ady, get_all_channels_freq_response, get_all_channels_ir
+from rew_exporter import (
+    export_channel_frd,
+    push_frequency_response_via_api,
+    push_impulse_response_via_api,
+    clear_measurements_via_api,
+)
 
 
 def main() -> None:
@@ -55,12 +63,28 @@ def main() -> None:
         action="store_true",
         help="Skip pushing to REW API",
     )
+    parser.add_argument(
+        "--ir",
+        action="store_true",
+        help="Push impulse response data instead of frequency response "
+             "(enables RT60, group delay, impulse, spectrogram views in REW)",
+    )
+    parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Delete all existing measurements in REW before importing",
+    )
     args = parser.parse_args()
 
     ady_path = Path(args.ady_path)
     if not ady_path.exists():
         sys.stderr.write(f"Error: file not found: {ady_path}\n")
         sys.exit(1)
+
+    # --- Clear REW measurements first (--clear flag) ---
+    if args.clear and not args.no_push:
+        print("Clearing all existing REW measurements...")
+        clear_measurements_via_api(host=args.api_host, port=args.api_port)
 
     print(f"Loading ADY file: {ady_path}")
     try:
@@ -69,6 +93,37 @@ def main() -> None:
         sys.stderr.write(f"Error loading ADY file: {e}\n")
         sys.exit(1)
 
+    # --- Impulse response mode ---
+    if args.ir:
+        print("Extracting impulse responses...")
+        channel_irs = get_all_channels_ir(data)
+        print(f"  {len(channel_irs)} channel(s) processed")
+
+        ir_ok = True
+        for ch_ir in channel_irs:
+            cmd_id = ch_ir["commandId"]
+            samples = ch_ir["samples"]
+            sample_rate = ch_ir["sample_rate"]
+
+            if not args.no_push:
+                ok = push_impulse_response_via_api(
+                    samples,
+                    cmd_id,
+                    sample_rate=sample_rate,
+                    host=args.api_host,
+                    port=args.api_port,
+                )
+                status = "✓" if ok else "✗"
+                print(f"  [{status}] IR push: {cmd_id} ({ch_ir['n_samples']} samples)")
+                if not ok:
+                    ir_ok = False
+
+        if not args.no_push:
+            print()
+            print(f"REW IR push: {'PASS' if ir_ok else 'FAIL'}")
+        return
+
+    # --- Frequency response mode (default) ---
     print("Computing frequency responses...")
     channel_responses = get_all_channels_freq_response(data)
     print(f"  {len(channel_responses)} channel(s) processed")

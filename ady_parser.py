@@ -279,6 +279,56 @@ def get_all_channels_freq_response(
 
 
 # -----------------------------------------------------------------------------
+# Impulse response extraction
+# -----------------------------------------------------------------------------
+
+def get_all_channels_ir(
+    data: dict[str, Any],
+    sample_rate: float = DEFAULT_SAMPLE_RATE,
+) -> list[dict[str, Any]]:
+    """Extract raw impulse response samples per channel from ADY data.
+
+    Each channel's responseData contains a list of time-domain float samples
+    (16384 samples at 48kHz = ~0.34 seconds of IR).
+
+    Args:
+        data: Parsed ADY content from load_ady().
+        sample_rate: Sample rate in Hz. Default: 48000.0.
+
+    Returns:
+        List of dicts, one per channel, each containing:
+            - commandId (str): speaker/channel identifier
+            - samples (np.ndarray): time-domain impulse response (float64)
+            - n_samples (int): number of samples (16384)
+            - sample_rate (float): sample rate in Hz
+    """
+    channels = get_channels(data)
+    result = []
+    for ch in channels:
+        cmd_id = ch.get('commandId') or ch.get('CommandID', 'UNKNOWN')
+        response_data = get_response_data(ch)
+        # Use the first position's data (test.ady has one position "0" per channel)
+        if not response_data:
+            result.append({
+                "commandId": cmd_id,
+                "samples": np.array([], dtype=np.float64),
+                "n_samples": 0,
+                "sample_rate": sample_rate,
+            })
+            continue
+        first_pos_key = list(response_data.keys())[0]
+        raw_samples = response_data[first_pos_key]
+        samples = np.asarray(raw_samples, dtype=np.float64)
+        result.append({
+            "commandId": cmd_id,
+            "samples": samples,
+            "n_samples": len(samples),
+            "sample_rate": sample_rate,
+        })
+    return result
+
+
+# -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
 
