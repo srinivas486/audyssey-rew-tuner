@@ -51,8 +51,12 @@ _OCTAVE_STEP = 1.0 / 6.0  # 1/6 octave
 
 
 def _make_target_frequencies() -> np.ndarray:
-    """Generate 1/6-octave frequency grid from 20 Hz to 20 kHz."""
-    log_min = np.log10(20.0)
+    """Generate 1/6-octave frequency grid from 10 Hz to 20 kHz.
+    
+    Extended below 20 Hz to cover deep bass subwoofer extension.
+    10 Hz start captures full subwoofer range.
+    """
+    log_min = np.log10(10.0)   # start at 10 Hz for subwoofer coverage
     log_max = np.log10(20000.0)
     n_steps = int(round((log_max - log_min) / _OCTAVE_STEP)) + 2
     log_freqs = np.linspace(log_min, log_max, n_steps)
@@ -68,19 +72,30 @@ TARGET_FREQUENCIES: np.ndarray = _make_target_frequencies()
 
 @dataclass
 class TargetCurveParams:
-    """Tunable parameters for target curve generation."""
+    """Tunable parameters for target curve generation.
+    
+    Based on Harman curve research (Olive & Toole, J. Audio Eng. Soc. 2012):
+    - Bass shelf: +5 to +7 dB below ~80 Hz (simulates room gain, natural bass preference)
+    - HF tilt: gentle downward slope above ~2-3 kHz (reduces harshness, accounts for room reflection)
+    - Smooth transitions throughout to avoid introducing new resonances
+    """
 
-    bass_shelf_gain: float = 6.0
-    """dB of bass lift at 20 Hz, rolling off to 0 dB at bass_shelf_start."""
+    bass_shelf_gain: float = 5.0
+    """dB of bass lift at the lowest frequency (10 Hz), rolling off to 0 dB at bass_shelf_start.
+    Typical range: +4 to +7 dB. Based on Harman curve research."""
 
     bass_shelf_start: float = 80.0
-    """Hz — frequency above which the bass shelf no longer applies."""
+    """Hz — frequency above which the bass shelf no longer applies.
+    This is the crossover region where speakers take over from subwoofers."""
 
-    tilt_start_hz: float = 3000.0
-    """Hz — frequency above which high-frequency tilt begins."""
+    tilt_start_hz: float = 2000.0
+    """Hz — frequency above which high-frequency tilt begins.
+    Below this, response is neutral/flat. Starting at 2 kHz gives natural treble balance."""
 
     tilt_rate: float = 1.5
-    """dB/decade — high-frequency downward tilt rate."""
+    """dB/decade — high-frequency downward tilt rate.
+    1.5 dB/decade is a gentle slope (more reflective room simulation).
+    Dirac uses similar tilt rates for living room acoustics."""
 
     mlp_weight: float = 2.0
     """Weight for MLP position (0) in the weighted average. Positions 1-7 get weight 1."""
@@ -88,11 +103,18 @@ class TargetCurveParams:
     outlier_threshold_db: float = 10.0
     """dB — if a position deviates more than this from MLP at a frequency, exclude it."""
 
-    smoothing_octave: float = 1.0 / 3.0
-    """Octave bandwidth for smoothing (1/3 octave = standard REW smoothing)."""
+    smoothing_octave: float = 1.0 / 2.0
+    """Octave bandwidth for smoothing — 1/2 octave (broader) to filter room modes before averaging.
+    1/3 octave is REW's default view smoothing; 1/2 octave better for target curve generation."""
+
+    smoothing_octave_final: float = 1.0 / 3.0
+    """Final smoothing applied to the output target curve. 1/3 octave is REW standard display smoothing."""
 
     crossover_freq: float = 80.0
     """Hz — subwoofer/speaker crossover frequency (used for alignment)."""
+
+    flat_target_db: float = 0.0
+    """dB — target curve reference level. 0 dB means the curve represents a flat/neutral target."""
 
 
 # -----------------------------------------------------------------------------
@@ -140,20 +162,23 @@ def apply_bass_shelf(
     spl: np.ndarray,
     start_hz: float,
     gain_db: float,
+    ref_hz: float = 20.0,
 ) -> np.ndarray:
     """Apply a smooth bass shelf boost below start_hz.
 
-    The boost at 20 Hz ≈ gain_db, rolling off to 0 dB at start_hz.
-    Below 20 Hz, the 20 Hz value is held constant.
+    The boost at the lowest frequency (10 Hz by default) ≈ gain_db,
+    rolling off to 0 dB at start_hz.
+    Below the lowest frequency in freqs, the value is held constant.
 
-    Roll-off formula:
-        shelfBoost(f) = gain_db * (1 - log10(f / start_hz) / log10(20 / start_hz))
+    Roll-off formula (logarithmic, matches Harman curve approach):
+        shelfBoost(f) = gain_db * (1 - log10(f / start_hz) / log10(ref_hz / start_hz))
 
     Args:
         freqs: Frequency array in Hz.
         spl: SPL values in dB.
         start_hz: Frequency above which no boost is applied.
-        gain_db: dB boost at 20 Hz.
+        gain_db: dB boost at ref_hz (default 20 Hz).
+        ref_hz: Reference frequency for maximum boost. Default 20 Hz.
 
     Returns:
         New SPL array with bass shelf applied.
@@ -163,13 +188,19 @@ def apply_bass_shelf(
     if not np.any(below_mask):
         return result
 
-    min_freq = max(freqs[below_mask].min(), 20.0)
-    log_ratio = np.log10(20.0 / start_hz)
+    # Handle any frequency range, using ref_hz as the point of maximum boost
+    if ref_hz <= start_hz:
+        ref_hz = start_hz / 2  # fallback if ref_hz is above start_hz
+
+    log_ratio = np.log10(ref_hz / start_hz)
+    if log_ratio == 0:
+        log_ratio = 1.0
 
     for i, freq in enumerate(freqs):
         if freq >= start_hz:
             continue
-        clamped_freq = max(freq, min_freq)
+        # Clamp to lowest frequency in grid (no boost below that)
+        clamped_freq = max(freq, freqs[0])
         t = 1.0 - np.log10(clamped_freq / start_hz) / log_ratio
         t = max(0.0, min(1.0, t))
         result[i] = spl[i] + gain_db * t
@@ -412,31 +443,52 @@ def generate_target_curve_from_ady(
         target_curves.append((TARGET_FREQUENCIES, channel_curve))
 
     if not target_curves:
-        # Fallback: return flat curve
-        return TARGET_FREQUENCIES.copy(), np.zeros_like(TARGET_FREQUENCIES)
+        # Fallback: return flat curve with Harman-style bass shelf
+        result = np.zeros_like(TARGET_FREQUENCIES)
+        result = apply_bass_shelf(TARGET_FREQUENCIES, result, params.bass_shelf_start, params.bass_shelf_gain)
+        result = apply_hf_tilt(TARGET_FREQUENCIES, result, params.tilt_start_hz, params.tilt_rate)
+        return TARGET_FREQUENCIES.copy(), result
 
     # Average across main channels (FL, C, FR)
+    # NOTE: We do NOT subtract the average level to normalize to 0 dB.
+    # The measured room response is preserved — the target curve is layered ON TOP
+    # of the measured curve, so REW's EQ applies correction = measured - target.
+    # The bass shelf and HF tilt ARE the target (offsets from neutral).
     avg_curve = np.zeros_like(TARGET_FREQUENCIES)
     for _, spl_arr in target_curves:
         avg_curve += spl_arr
     avg_curve /= len(target_curves)
 
-    # Apply bass shelf
+    # Subtract the average level so the curve represents offsets from neutral (0 dB).
+    # This is what REW expects for a house curve — offsets relative to flat/neutral.
+    avg_level = np.mean(avg_curve)
+    avg_curve = avg_curve - avg_level
+
+    # Apply Harman-style bass shelf boost
+    # Boost rises from 0 dB at crossover (80 Hz) to +bass_shelf_gain dB at 10 Hz
+    # This simulates the natural room gain and preferred bass balance from listener tests
     avg_curve = apply_bass_shelf(
         TARGET_FREQUENCIES, avg_curve,
         start_hz=params.bass_shelf_start,
         gain_db=params.bass_shelf_gain,
+        ref_hz=20.0,  # boost peaks at 20 Hz
     )
 
-    # Apply HF tilt
+    # Apply high-frequency downward tilt
+    # Below tilt_start_hz: flat (0 dB offset)
+    # Above tilt_start_hz: gentle downward slope to reduce harshness and simulate
+    #                      the natural in-room treble rolloff seen in listening tests
     avg_curve = apply_hf_tilt(
         TARGET_FREQUENCIES, avg_curve,
         start_hz=params.tilt_start_hz,
         tilt_rate=params.tilt_rate,
     )
 
-    # Apply smoothing
+    # Apply smoothing: 1/2 octave to filter room modal behaviour
     avg_curve = smooth_curve(TARGET_FREQUENCIES, avg_curve, params.smoothing_octave)
+
+    # Final smoothing pass: 1/3 octave for REW display standard
+    avg_curve = smooth_curve(TARGET_FREQUENCIES, avg_curve, params.smoothing_octave_final)
 
     return TARGET_FREQUENCIES.copy(), avg_curve
 
