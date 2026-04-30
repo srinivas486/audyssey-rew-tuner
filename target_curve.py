@@ -509,13 +509,13 @@ def push_target_curve_via_api(
         host = "127.0.0.1"
     url = f"http://{host}:{port}/eq/house-curve"
 
-    payload = json.dumps({"path": resolved}).encode("utf-8")
+    payload = resolved.encode("utf-8")
 
     try:
         req = urllib.request.Request(
             url,
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "text/plain"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
