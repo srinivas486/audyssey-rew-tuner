@@ -307,24 +307,23 @@ def get_all_channels_ir(
     for ch in channels:
         cmd_id = ch.get('commandId') or ch.get('CommandID', 'UNKNOWN')
         response_data = get_response_data(ch)
-        # Use the first position's data (test.ady has one position "0" per channel)
         if not response_data:
             result.append({
-                "commandId": cmd_id,
+                "commandId": cmd_id + "0",
                 "samples": np.array([], dtype=np.float64),
                 "n_samples": 0,
                 "sample_rate": sample_rate,
             })
             continue
-        first_pos_key = list(response_data.keys())[0]
-        raw_samples = response_data[first_pos_key]
-        samples = np.asarray(raw_samples, dtype=np.float64)
-        result.append({
-            "commandId": cmd_id,
-            "samples": samples,
-            "n_samples": len(samples),
-            "sample_rate": sample_rate,
-        })
+        for pos_key in sorted(response_data.keys(), key=lambda k: int(k)):
+            raw_samples = response_data[pos_key]
+            samples = np.asarray(raw_samples, dtype=np.float64)
+            result.append({
+                "commandId": cmd_id + pos_key,
+                "samples": samples,
+                "n_samples": len(samples),
+                "sample_rate": sample_rate,
+            })
     return result
 
 
