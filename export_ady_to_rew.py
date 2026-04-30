@@ -31,10 +31,10 @@ from rew_exporter import (
     clear_measurements_via_api,
 )
 from target_curve import (
-    generate_all_speaker_targets,
-    generate_merged_target,
+    generate_house_curve,
     export_merged_target,
     push_merged_target_via_api,
+    TargetCurveParams,
 )
 
 
@@ -85,7 +85,14 @@ def main() -> None:
         "--target-curve",
         action="store_true",
         default=False,
-        help="Generate a target/house curve from measurements and load it into REW",
+        help="Generate a house curve from speaker + subwoofer measurements and load it into REW",
+    )
+    parser.add_argument(
+        "--target-spl",
+        type=float,
+        default=None,
+        help="Target SPL in dB for the house curve midrange (e.g. 85). "
+             "If not set, inferred from measurement reference levels.",
     )
     args = parser.parse_args()
 
@@ -138,40 +145,40 @@ def main() -> None:
 
     # --- Target curve mode ---
     if args.target_curve:
-        print("Generating target curve from FL, C, FR channels...")
+        print("Generating house curve from speaker + subwoofer measurements...")
         channel_responses = get_all_channels_freq_response(data)
-        try:
-            speaker_targets = generate_all_speaker_targets(channel_responses, None)
-        except Exception as e:
-            sys.stderr.write(f"Error generating target curve: {e}\n")
-            sys.exit(1)
-        if not speaker_targets:
-            sys.stderr.write("No speaker channels (FL/C/FR) found in measurement file.\n")
+        params = TargetCurveParams()
+        if args.target_spl is not None:
+            params.target_spl_db = args.target_spl
+
+        freqs, house_spl = generate_house_curve(channel_responses, params)
+
+        if len(freqs) == 0:
+            sys.stderr.write("No speaker or subwoofer channels found.\n")
             sys.exit(1)
 
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"Writing merged target curve ({len(speaker_targets)} channels)...")
-        freqs, merged_spl = generate_merged_target(speaker_targets)
-        ok = export_merged_target(freqs, merged_spl, output_dir)
+        print(f"Writing house curve ({len(freqs)} points)...")
+        ok = export_merged_target(freqs, house_spl, output_dir)
         if not ok:
-            sys.stderr.write("Failed to write merged target curve file.\n")
+            sys.stderr.write("Failed to write house curve file.\n")
             sys.exit(1)
 
         if not args.no_push:
-            print(f"Pushing merged target curve to REW at {args.api_host}:{args.api_port}...")
+            print(f"Pushing house curve to REW at {args.api_host}:{args.api_port}...")
             pushed = push_merged_target_via_api(
-                freqs, merged_spl,
+                freqs, house_spl,
                 host=args.api_host,
                 port=args.api_port,
             )
             if pushed:
-                print("Merged target curve loaded into REW ✓")
+                print("House curve loaded into REW ✓")
             else:
-                sys.stderr.write("Failed to push merged target curve to REW.\n")
+                sys.stderr.write("Failed to push house curve to REW.\n")
                 sys.exit(1)
-        print(f"Merged target: {output_dir / 'merged_target.frd'}")
+        print(f"House curve: {output_dir / 'merged_target.frd'}")
         return
 
     # --- Frequency response mode (default) ---
