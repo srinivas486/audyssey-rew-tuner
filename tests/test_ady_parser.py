@@ -12,6 +12,7 @@ from ady_parser import (
     ADYParseError,
     ADYValidationError,
     get_all_channels_freq_response,
+    get_all_channels_ir,
     get_channel_freq_response,
     get_channel_ids,
     get_channels,
@@ -447,4 +448,96 @@ class TestRealAdyFile:
                     f"Channel {ch.get('commandId')} position {pos_key}: "
                     f"expected 16384 samples, got {len(samples)}"
                 )
+
+
+class TestGetAllChannelsIr:
+    def test_returns_list_of_all_channels(self):
+        """Returns one entry per channel in the ADY data."""
+        data = {
+            "detectedChannels": [
+                {"commandId": "FL", "responseData": {"0": [0.1] * 512}},
+                {"commandId": "FR", "responseData": {"0": [0.2] * 512}},
+            ]
+        }
+        results = get_all_channels_ir(data)
+        assert len(results) == 2
+        assert [r["commandId"] for r in results] == ["FL", "FR"]
+
+    def test_samples_are_numpy_float64_array(self):
+        """samples field is a numpy float64 array."""
+        data = {
+            "detectedChannels": [
+                {"commandId": "FL", "responseData": {"0": [0.1, 0.2, 0.3] * 100}},
+            ]
+        }
+        results = get_all_channels_ir(data)
+        assert results[0]["samples"].dtype == np.float64
+
+    def test_n_samples_is_correct(self):
+        """n_samples reflects the actual sample count."""
+        data = {
+            "detectedChannels": [
+                {"commandId": "FL", "responseData": {"0": [0.1] * 512}},
+            ]
+        }
+        results = get_all_channels_ir(data)
+        assert results[0]["n_samples"] == 512
+
+    def test_sample_rate_default_is_48000(self):
+        """Default sample rate is 48000.0 Hz."""
+        data = {
+            "detectedChannels": [
+                {"commandId": "FL", "responseData": {"0": [0.1] * 256}},
+            ]
+        }
+        results = get_all_channels_ir(data)
+        assert results[0]["sample_rate"] == 48000.0
+
+    def test_handles_empty_response_data(self):
+        """Empty responseData returns empty samples array."""
+        data = {
+            "detectedChannels": [
+                {"commandId": "FL", "responseData": {}},
+            ]
+        }
+        results = get_all_channels_ir(data)
+        assert results[0]["commandId"] == "FL"
+        assert len(results[0]["samples"]) == 0
+        assert results[0]["n_samples"] == 0
+
+    def test_uses_first_position_key(self):
+        """First position key is used when multiple positions exist."""
+        data = {
+            "detectedChannels": [
+                {
+                    "commandId": "FL",
+                    "responseData": {
+                        "0": [1.0] * 100,
+                        "1": [2.0] * 100,
+                    },
+                },
+            ]
+        }
+        results = get_all_channels_ir(data)
+        # Should use position "0" (first key)
+        np.testing.assert_array_equal(results[0]["samples"], [1.0] * 100)
+
+    def test_real_test_ady_all_11_channels(self):
+        """test.ady has 11 channels with 16384 samples each."""
+        real_path = Path(__file__).parent.parent / "test.ady"
+        if not real_path.exists():
+            pytest.skip("test.ady not present in repo root")
+
+        data = load_ady(real_path)
+        results = get_all_channels_ir(data)
+
+        assert len(results) == 11
+        for ch_ir in results:
+            assert ch_ir["n_samples"] == 16384
+            assert ch_ir["sample_rate"] == 48000.0
+            assert ch_ir["samples"].dtype == np.float64
+            assert len(ch_ir["samples"]) == 16384
+
+        cmd_ids = [r["commandId"] for r in results]
+        assert cmd_ids == ["FL", "C", "FR", "SLA", "SRA", "FDL", "FDR", "SDL", "SDR", "SW1", "SW2"]
 
