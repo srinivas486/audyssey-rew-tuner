@@ -233,7 +233,7 @@ def clear_measurements_via_api(
 # Story 2.3 — Push impulse response via REW API
 # -----------------------------------------------------------------------------
 
-def push_impulse_response_via_api((
+def push_impulse_response_via_api(
     samples: list[float] | np.ndarray,
     channel_name: str,
     sample_rate: float = 48000.0,
