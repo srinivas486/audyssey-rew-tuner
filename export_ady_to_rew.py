@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""End-to-end pipeline: load an ADY file, export .frd files, and push to REW.
+
+Usage::
+
+    python export_ady_to_rew.py <path-to.ady> [--output-dir ./output]
+                                     [--api-host localhost]
+                                     [--api-port 4735]
+                                     [--no-export]     skip .frd file export
+                                     [--no-push]       skip REW API push
+
+Example::
+
+    python export_ady_to_rew.py test.ady --output-dir ./output
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from ady_parser import load_ady, get_all_channels_freq_response
+from rew_exporter import export_channel_frd, push_frequency_response_via_api
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Export ADY frequency response data to REW .frd files and/or REW API."
+    )
+    parser.add_argument("ady_path", help="Path to the .ady measurement file")
+    parser.add_argument(
+        "--output-dir",
+        default="./output",
+        help="Directory to write .frd files into (default: ./output)",
+    )
+    parser.add_argument(
+        "--api-host",
+        default="localhost",
+        help="REW API host (default: localhost)",
+    )
+    parser.add_argument(
+        "--api-port",
+        type=int,
+        default=4735,
+        help="REW API port (default: 4735)",
+    )
+    parser.add_argument(
+        "--no-export",
+        action="store_true",
+        help="Skip writing .frd files",
+    )
+    parser.add_argument(
+        "--no-push",
+        action="store_true",
+        help="Skip pushing to REW API",
+    )
+    args = parser.parse_args()
+
+    ady_path = Path(args.ady_path)
+    if not ady_path.exists():
+        sys.stderr.write(f"Error: file not found: {ady_path}\n")
+        sys.exit(1)
+
+    print(f"Loading ADY file: {ady_path}")
+    try:
+        data = load_ady(str(ady_path))
+    except Exception as e:
+        sys.stderr.write(f"Error loading ADY file: {e}\n")
+        sys.exit(1)
+
+    print("Computing frequency responses...")
+    channel_responses = get_all_channels_freq_response(data)
+    print(f"  {len(channel_responses)} channel(s) processed")
+
+    frd_ok = True
+    api_ok = True
+
+    for ch in channel_responses:
+        cmd_id = ch["commandId"]
+        avg = ch["averaged"]
+        freq = list(avg["freq_hz"])   # np.ndarray → plain list
+        spl = list(avg["spl_db"])      # np.ndarray → plain list
+
+        # --- .frd export ---
+        if not args.no_export:
+            ok = export_channel_frd(freq, spl, args.output_dir, cmd_id)
+            status = "✓" if ok else "✗"
+            print(f"  [{status}] .frd export: {cmd_id}")
+            if not ok:
+                frd_ok = False
+
+        # --- REW API push ---
+        if not args.no_push:
+            ok = push_frequency_response_via_api(
+                freq, spl, cmd_id,
+                host=args.api_host,
+                port=args.api_port,
+            )
+            status = "✓" if ok else "✗"
+            print(f"  [{status}] REW API push: {cmd_id}")
+            if not ok:
+                api_ok = False
+
+    # Summary
+    print()
+    if not args.no_export:
+        print(f".frd export: {'PASS' if frd_ok else 'FAIL'}")
+    if not args.no_push:
+        push_status = 'PASS' if api_ok else 'FAIL'
+        print(f"REW API push: {push_status}")
+
+
+if __name__ == "__main__":
+    main()
