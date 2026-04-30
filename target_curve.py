@@ -166,44 +166,40 @@ def apply_bass_shelf(
 ) -> np.ndarray:
     """Apply a smooth bass shelf boost below start_hz.
 
-    The boost at the lowest frequency (10 Hz by default) ≈ gain_db,
-    rolling off to 0 dB at start_hz.
-    Below the lowest frequency in freqs, the value is held constant.
+    The boost reaches maximum gain_db at ref_hz (typically 20 Hz),
+    rolls off to 0 dB at start_hz (typically 80 Hz).
 
-    Roll-off formula (logarithmic, matches Harman curve approach):
-        shelfBoost(f) = gain_db * (1 - log10(f / start_hz) / log10(ref_hz / start_hz))
+    Harman curve shelf formula:
+        t = (log10(f) - log10(ref_hz)) / (log10(start_hz) - log10(ref_hz))
+        boost = gain_db * (1 - t)   for ref_hz <= f < start_hz
+        boost = gain_db              for f < ref_hz (constant below ref_hz)
 
     Args:
         freqs: Frequency array in Hz.
         spl: SPL values in dB.
-        start_hz: Frequency above which no boost is applied.
-        gain_db: dB boost at ref_hz (default 20 Hz).
-        ref_hz: Reference frequency for maximum boost. Default 20 Hz.
+        start_hz: Frequency above which no boost is applied (crossover point).
+        gain_db: Maximum dB boost at ref_hz.
+        ref_hz: Frequency of maximum boost. Default 20 Hz.
 
     Returns:
         New SPL array with bass shelf applied.
     """
     result = spl.copy()
-    below_mask = freqs < start_hz
-    if not np.any(below_mask):
-        return result
 
-    # Handle any frequency range, using ref_hz as the point of maximum boost
-    if ref_hz <= start_hz:
-        ref_hz = start_hz / 2  # fallback if ref_hz is above start_hz
-
-    log_ratio = np.log10(ref_hz / start_hz)
-    if log_ratio == 0:
-        log_ratio = 1.0
+    log_ref = np.log10(ref_hz)
+    log_start = np.log10(start_hz)
+    log_range = log_start - log_ref  # positive when ref_hz < start_hz
 
     for i, freq in enumerate(freqs):
         if freq >= start_hz:
             continue
-        # Clamp to lowest frequency in grid (no boost below that)
-        clamped_freq = max(freq, freqs[0])
-        t = 1.0 - np.log10(clamped_freq / start_hz) / log_ratio
+        if freq <= ref_hz:
+            result[i] = spl[i] + gain_db  # constant full boost below ref_hz
+            continue
+        # Logarithmic roll-off between ref_hz and start_hz
+        t = (np.log10(freq) - log_ref) / log_range  # 0 at ref_hz, 1 at start_hz
         t = max(0.0, min(1.0, t))
-        result[i] = spl[i] + gain_db * t
+        result[i] = spl[i] + gain_db * (1.0 - t)
 
     return result
 
@@ -352,15 +348,22 @@ def generate_target_curve_from_ady(
     data: dict[str, Any],
     params: TargetCurveParams | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate a target curve from parsed ADY measurement data.
+    """Generate a Harman-style target curve from parsed ADY measurement data.
+
+    The target curve defines a PREFERRED response shape (independent of what was
+    measured). This is a Harman curve: smooth bass shelf below ~80 Hz (+5 dB
+    at 20 Hz), neutral midrange, gentle treble tilt above ~2 kHz.
+
+    REW's EQ then computes correction = measured_response - target_curve,
+    boosting frequencies where the room is deficient and cutting where it's
+    over-absorbent.
 
     Algorithm:
-    1. For each main channel (FL, C, FR), compute MLP-weighted geometric mean
-       across positions 0-7 with outlier rejection.
-    2. Average the three MLP-weighted curves into a single target.
-    3. Apply bass shelf boost below bass_shelf_start.
-    4. Apply HF downward tilt above tilt_start_hz.
-    5. Apply 1/3-octave smoothing.
+    1. Start with 0 dB neutral reference
+    2. Apply Harman curve shape: bass shelf +5 dB @ 20 Hz, flat midrange,
+       HF tilt -1.5 dB/decade above 2 kHz
+    3. Smooth with 1/2 octave to remove narrow artifacts
+    4. Final 1/3 octave smoothing for REW display standard
 
     Args:
         data: Parsed ADY content from ady_parser.load_ady().
@@ -372,217 +375,36 @@ def generate_target_curve_from_ady(
     if params is None:
         params = TargetCurveParams()
 
-    # Import here to avoid circular dependency
-    from ady_parser import get_all_channels_freq_response, get_channels
+    # Start with 0 dB neutral (flat target)
+    target = np.zeros_like(TARGET_FREQUENCIES)
 
-    channels = get_channels(data)
-    channel_responses = get_all_channels_freq_response(data)
-
-    # Build a lookup: commandId -> freq response dict
-    response_lookup: dict[str, dict[str, Any]] = {}
-    for ch_resp in channel_responses:
-        cmd_id = ch_resp.get("commandId", "UNKNOWN")
-        # Normalize to lowercase for matching
-        response_lookup[cmd_id.lower()] = ch_resp
-        response_lookup[cmd_id.upper()] = ch_resp
-
-    target_curves: list[tuple[np.ndarray, np.ndarray]] = []
-
-    for main_id in sorted(MAIN_CHANNEL_IDS):
-        # Try various case/spelling variants
-        ch_resp = (
-            response_lookup.get(main_id)
-            or response_lookup.get(main_id.upper())
-            or response_lookup.get(main_id.lower())
-        )
-        if ch_resp is None:
-            continue
-
-        positions_data = ch_resp.get("positions", {})
-        if not positions_data:
-            continue
-
-        # Get MLP (position 0) SPL interpolated to target frequencies
-        if "0" not in positions_data:
-            continue
-
-        mlp_freq = positions_data["0"]["freq_hz"]
-        mlp_spl_orig = positions_data["0"]["spl_db"]
-        mlp_spl_interp = np.interp(TARGET_FREQUENCIES, mlp_freq, mlp_spl_orig, left=np.nan, right=np.nan)
-
-        # Build list of [MLP_spl, pos1_spl, ..., pos7_spl]
-        all_spl_arrays: list[np.ndarray] = [mlp_spl_interp]
-        for pos in range(1, 8):
-            pos_key = str(pos)
-            if pos_key not in positions_data:
-                continue
-            pos_freq = positions_data[pos_key]["freq_hz"]
-            pos_spl_orig = positions_data[pos_key]["spl_db"]
-            pos_spl_interp = np.interp(TARGET_FREQUENCIES, mlp_freq, pos_spl_orig, left=np.nan, right=np.nan)
-            all_spl_arrays.append(pos_spl_interp)
-
-        # Apply outlier rejection
-        mlp_list = list(mlp_spl_interp)
-        all_lists = [list(a) for a in all_spl_arrays]
-        accepted_lists, _ = _apply_outlier_rejection(mlp_list, all_lists, params.outlier_threshold_db)
-
-        # Weighted geometric mean
-        # MLP (index 0) gets weight = mlp_weight; all others get weight 1
-        n_accepted = len(accepted_lists)
-        if n_accepted == 0:
-            continue
-
-        weights = [params.mlp_weight] + [1.0] * (n_accepted - 1)
-
-        channel_curve = np.zeros_like(TARGET_FREQUENCIES)
-        for i in range(len(TARGET_FREQUENCIES)):
-            spl_at_i = [pos[i] for pos in accepted_lists]
-            w_at_i = weights[:len(spl_at_i)]
-            channel_curve[i] = weighted_geometric_mean(spl_at_i, w_at_i)
-
-        target_curves.append((TARGET_FREQUENCIES, channel_curve))
-
-    if not target_curves:
-        # Fallback: return flat curve with Harman-style bass shelf
-        result = np.zeros_like(TARGET_FREQUENCIES)
-        result = apply_bass_shelf(TARGET_FREQUENCIES, result, params.bass_shelf_start, params.bass_shelf_gain)
-        result = apply_hf_tilt(TARGET_FREQUENCIES, result, params.tilt_start_hz, params.tilt_rate)
-        return TARGET_FREQUENCIES.copy(), result
-
-    # Average across main channels (FL, C, FR)
-    # NOTE: We do NOT subtract the average level to normalize to 0 dB.
-    # The measured room response is preserved — the target curve is layered ON TOP
-    # of the measured curve, so REW's EQ applies correction = measured - target.
-    # The bass shelf and HF tilt ARE the target (offsets from neutral).
-    avg_curve = np.zeros_like(TARGET_FREQUENCIES)
-    for _, spl_arr in target_curves:
-        avg_curve += spl_arr
-    avg_curve /= len(target_curves)
-
-    # Subtract the average level so the curve represents offsets from neutral (0 dB).
-    # This is what REW expects for a house curve — offsets relative to flat/neutral.
-    avg_level = np.mean(avg_curve)
-    avg_curve = avg_curve - avg_level
-
-    # Apply Harman-style bass shelf boost
-    # Boost rises from 0 dB at crossover (80 Hz) to +bass_shelf_gain dB at 10 Hz
-    # This simulates the natural room gain and preferred bass balance from listener tests
-    avg_curve = apply_bass_shelf(
-        TARGET_FREQUENCIES, avg_curve,
+    # Apply Harman curve bass shelf: boost below bass_shelf_start Hz
+    # Gain peaks at ref_hz (20 Hz) and rolls off to 0 dB at bass_shelf_start (80 Hz)
+    target = apply_bass_shelf(
+        TARGET_FREQUENCIES,
+        target,
         start_hz=params.bass_shelf_start,
         gain_db=params.bass_shelf_gain,
-        ref_hz=20.0,  # boost peaks at 20 Hz
+        ref_hz=20.0,
     )
 
-    # Apply high-frequency downward tilt
-    # Below tilt_start_hz: flat (0 dB offset)
-    # Above tilt_start_hz: gentle downward slope to reduce harshness and simulate
-    #                      the natural in-room treble rolloff seen in listening tests
-    avg_curve = apply_hf_tilt(
-        TARGET_FREQUENCIES, avg_curve,
+    # Apply high-frequency tilt above tilt_start_hz
+    # Gentle downward slope above 2 kHz: reduces harshness, simulates
+    # in-room reflection characteristic (Harman research)
+    target = apply_hf_tilt(
+        TARGET_FREQUENCIES,
+        target,
         start_hz=params.tilt_start_hz,
         tilt_rate=params.tilt_rate,
     )
 
-    # Apply smoothing: 1/2 octave to filter room modal behaviour
-    avg_curve = smooth_curve(TARGET_FREQUENCIES, avg_curve, params.smoothing_octave)
+    # Apply 1/2 octave smoothing (filters room modal narrow peaks)
+    target = smooth_curve(TARGET_FREQUENCIES, target, params.smoothing_octave)
 
-    # Final smoothing pass: 1/3 octave for REW display standard
-    avg_curve = smooth_curve(TARGET_FREQUENCIES, avg_curve, params.smoothing_octave_final)
+    # Final 1/3 octave smoothing for REW display standard
+    target = smooth_curve(TARGET_FREQUENCIES, target, params.smoothing_octave_final)
 
-    return TARGET_FREQUENCIES.copy(), avg_curve
-
-
-# -----------------------------------------------------------------------------
-# File export
-# -----------------------------------------------------------------------------
-
-def export_target_curve_txt(
-    freqs: np.ndarray,
-    spl: np.ndarray,
-    path: Path | str,
-) -> bool:
-    """Write a target curve to a plain-text REW house curve file.
-
-    Format (one line per point, space-separated):
-        <frequency_hz> <offset_db>
-
-    Frequencies are written in ascending order.
-
-    Args:
-        freqs: Frequency array in Hz.
-        spl: SPL/offset array in dB.
-        path: Output file path.
-
-    Returns:
-        True on success, False on error.
-    """
-    try:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        pairs = sorted(zip(freqs, spl), key=lambda p: p[0])
-        with open(path, "w", encoding="utf-8") as f:
-            for freq, offset in pairs:
-                f.write(f"{freq:.4f} {offset:.4f}\n")
-        return True
-    except OSError as e:
-        print(f"export_target_curve_txt: failed to write {path}: {e}")
-        return False
+    return TARGET_FREQUENCIES.copy(), target
 
 
-# -----------------------------------------------------------------------------
-# REW API: push house curve
-# -----------------------------------------------------------------------------
 
-def push_target_curve_via_api(
-    path: Path | str,
-    host: str = REW_API_DEFAULT_HOST,
-    port: int = REW_API_DEFAULT_PORT,
-) -> bool:
-    """Tell REW to load a house curve file via the /eq/house-curve API.
-
-    POST http://{host}:{port}/eq/house-curve
-    Content-Type: application/json
-
-    {"path": "/absolute/path/to/file.txt"}
-
-    Args:
-        path: Absolute path to the house curve .txt file.
-        host: REW API host. Default: "localhost".
-        port: REW API port. Default: 4735.
-
-    Returns:
-        True when REW accepts the request (HTTP 2xx), False on error.
-    """
-    resolved = str(Path(path).resolve())
-
-    if host in ("localhost", "127.0.0.1"):
-        host = "127.0.0.1"
-    url = f"http://{host}:{port}/eq/house-curve"
-
-    import json
-    # REW expects a JSON string value: "/absolute/path" (double-quoted path)
-    payload = json.dumps(resolved).encode("utf-8")
-
-    try:
-        req = urllib.request.Request(
-            url,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            status = resp.status
-            print(f"  [✓] Target curve loaded into REW (HTTP {status}): {resolved}")
-            return True
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        print(f"  [✗] REW house-curve API HTTP {e.code}: {body[:300]}")
-        return False
-    except urllib.error.URLError as e:
-        print(f"  [✗] REW not reachable at {host}:{port}: {e.reason}")
-        return False
-    except OSError as e:
-        print(f"  [✗] REW not reachable at {host}:{port}: {e}")
-        return False
