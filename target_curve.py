@@ -124,6 +124,9 @@ class TargetCurveParams:
     shelf_gain: float = 5.0
     """dB above ref — target shelf level for subwoofer LF extension (default +5 dB)."""
 
+    hpf_cutoff_threshold_db: float = 12.0
+    """dB below midrange ref for HPF cutoff detection in speaker response."""
+
 
 # -----------------------------------------------------------------------------
 # Core signal processing
@@ -671,6 +674,348 @@ def push_subwoofer_target_via_api(
         freq_hz=list(freq),
         spl_db=list(target_db),
         channel_name=f"{sw_id}_target",
+        host=host,
+        port=port,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Story 2 — Speaker HPF Shaping + Merged Target Curve
+# -----------------------------------------------------------------------------
+
+def detect_lf_cutoff(
+    freq_hz: np.ndarray,
+    spl_db: np.ndarray,
+    threshold_db: float = 12.0,
+) -> tuple[float, float]:
+    """Detect speaker LF cutoff from measured response.
+
+    Uses the 200–500 Hz window as the midrange reference band.
+    Reference = mean SPL in 200–500 Hz band.
+    Cutoff = lowest frequency in that band where smoothed SPL first drops
+    BELOW (ref_db - threshold_db). If no point in the band is below threshold,
+    returns the lowest frequency in the band (indicating a full-range speaker).
+
+    Args:
+        freq_hz: Measured frequency bins (Hz).
+        spl_db: Measured SPL values in dB (same length as freq_hz).
+        threshold_db: dB below the reference band average to search for the cutoff.
+
+    Returns:
+        Tuple of (cutoff_hz, ref_db) where cutoff_hz is the detected LF cutoff
+        in Hz, and ref_db is the midrange reference level.
+    """
+    # Smooth response with 1/3-octave to remove narrow room effects
+    smoothed = smooth_curve(freq_hz, spl_db, octave_bw=1.0 / 3.0)
+
+    # Reference: mean SPL in 200–500 Hz band
+    band_mask = (freq_hz >= 200.0) & (freq_hz <= 500.0)
+    if not np.any(band_mask):
+        ref_db = float(np.mean(spl_db))
+        return float(freq_hz[0]) if len(freq_hz) > 0 else 0.0, ref_db
+
+    band_freqs = freq_hz[band_mask]
+    band_spls = smoothed[band_mask]
+    ref_db = float(np.mean(band_spls))
+
+    threshold = ref_db - threshold_db
+
+    # Walk ascending through the 200–500 Hz band
+    for i in range(len(band_freqs)):
+        if band_spls[i] < threshold:
+            return float(band_freqs[i]), ref_db
+
+    # No point fell below threshold — full-range speaker
+    return float(band_freqs[0]), ref_db
+
+
+def generate_speaker_target(
+    freq_hz: np.ndarray,
+    spl_db: np.ndarray,
+    params: TargetCurveParams,
+    cutoff_hz: float,
+    ref_db: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate HPF-shaped target for a speaker.
+
+    Algorithm:
+    1. Interpolate measured response to TARGET_FREQUENCIES grid.
+    2. Below cutoff: HPF-style taper, never above measured SPL (prevents over-correction).
+    3. Between cutoff and tilt_start_hz: flat at ref_db.
+    4. Above tilt_start_hz: Harman HF tilt.
+    5. 1/3-octave smoothing on output.
+
+    Args:
+        freq_hz: Measured frequency bins for the speaker (Hz).
+        spl_db: Measured SPL values in dB.
+        params: TargetCurveParams with hpf_cutoff_threshold_db, tilt_start_hz,
+            tilt_rate, smoothing_octave_final settings.
+        cutoff_hz: LF cutoff from detect_lf_cutoff().
+        ref_db: Midrange reference level from detect_lf_cutoff().
+
+
+    Returns:
+        Tuple of (freq, target_db) aligned to TARGET_FREQUENCIES.
+    """
+    # Interpolate measured response onto TARGET_FREQUENCIES
+    measured_interp = np.interp(
+        TARGET_FREQUENCIES, freq_hz, spl_db, left=np.nan, right=np.nan
+    )
+
+    # Start target: flat at ref_db (neutral midrange)
+    target = np.full_like(TARGET_FREQUENCIES, ref_db, dtype=float)
+
+    # Below cutoff: HPF-style taper that never exceeds measured SPL
+    below_cutoff = TARGET_FREQUENCIES < cutoff_hz
+    if np.any(below_cutoff):
+        bottom_freq = float(TARGET_FREQUENCIES[below_cutoff][0])
+        log_bottom = np.log10(bottom_freq)
+        log_cutoff = np.log10(cutoff_hz)
+        log_range = log_cutoff - log_bottom
+        if log_range <= 0:
+            log_range = 1.0
+
+        for i, freq in enumerate(TARGET_FREQUENCIES):
+            if freq >= cutoff_hz or np.isnan(measured_interp[i]):
+                continue
+            t = (np.log10(freq) - log_bottom) / log_range
+            t = max(0.0, min(1.0, t))
+            # HPF-style rising taper from 0 at bottom to ref_db at cutoff
+            tapered = ref_db * t
+            target[i] = min(tapered, float(measured_interp[i]))
+
+    # Apply 1/3-octave smoothing to the full target
+    target = smooth_curve(TARGET_FREQUENCIES, target, params.smoothing_octave_final)
+
+    # Above tilt_start_hz: Harman HF tilt
+    target = apply_hf_tilt(
+        TARGET_FREQUENCIES,
+        target,
+        start_hz=params.tilt_start_hz,
+        tilt_rate=params.tilt_rate,
+    )
+
+    return TARGET_FREQUENCIES.copy(), target
+
+
+def generate_all_speaker_targets(
+    channel_freq_responses: list[dict[str, Any]],
+    params: TargetCurveParams,
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """Generate per-speaker HPF targets for FL, C, FR.
+
+    Args:
+        channel_freq_responses: List of channel frequency response dicts from
+            get_all_channels_freq_response(). Each entry has:
+            - commandId: str
+            - positions: {pos_key: {freq_hz, spl_db}}
+            - averaged: {freq_hz, spl_db}
+        params: TargetCurveParams instance.
+
+    Returns:
+        Dict mapping commandId (lowercase) -> (freq_hz, target_db) tuple.
+        Only MAIN_CHANNEL_IDS (FL, C, FR) are processed.
+    """
+    result: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+
+    for channel in channel_freq_responses:
+        cmd_id_raw = channel.get("commandId", "")
+        cmd_id = cmd_id_raw.lower()
+
+        if cmd_id not in MAIN_CHANNEL_IDS:
+            continue
+
+        averaged = channel.get("averaged")
+        if averaged is None:
+            continue
+
+        freq_hz = np.asarray(averaged["freq_hz"])
+        spl_db = np.asarray(averaged["spl_db"])
+
+        # Detect LF cutoff
+        cutoff_hz, ref_db = detect_lf_cutoff(
+            freq_hz, spl_db, threshold_db=params.hpf_cutoff_threshold_db
+        )
+
+        # Generate HPF target
+        target_freq, target_db = generate_speaker_target(
+            freq_hz, spl_db, params, cutoff_hz, ref_db
+        )
+
+        result[cmd_id] = (target_freq, target_db)
+
+    return result
+
+
+def export_speaker_target(
+    freq: np.ndarray,
+    target_db: np.ndarray,
+    output_dir: str | Path,
+    speaker_id: str,
+) -> bool:
+    """Write a speaker target curve to ``{speaker_id}_target.frd``.
+
+
+    Args:
+        freq: Frequency bins in Hz.
+        target_db: Target SPL values in dB.
+        output_dir: Directory to write the .frd file into.
+        speaker_id: Speaker identifier (e.g. "fl", "c", "fr").
+
+            Output filename: ``{speaker_id}_target.frd``.
+
+    Returns:
+        True on success, False on error.
+    """
+    return rew_exporter.export_channel_frd(freq, target_db, output_dir, f"{speaker_id}_target")
+
+
+def push_speaker_target_via_api(
+    speaker_id: str,
+    freq: np.ndarray,
+    target_db: np.ndarray,
+    host: str = REW_API_DEFAULT_HOST,
+    port: int = REW_API_DEFAULT_PORT,
+) -> bool:
+    """Push a speaker target curve to REW via the frequency response API.
+
+    Args:
+        speaker_id: Speaker identifier (e.g. "fl", "c", "fr").
+            REW curve name: ``{speaker_id}_target``.
+        freq: Frequency bins in Hz.
+        target_db: Target SPL values in dB.
+        host: REW API host. Default: "localhost".
+        port: REW API port. Default: 4735.
+
+    Returns:
+        True when REW accepts the data (HTTP 2xx). False otherwise.
+    """
+    return rew_exporter.push_frequency_response_via_api(
+        freq_hz=list(freq),
+        spl_db=list(target_db),
+        channel_name=f"{speaker_id}_target",
+        host=host,
+        port=port,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Merged Target Curve
+# -----------------------------------------------------------------------------
+
+def generate_merged_target(
+    speaker_targets: dict[str, tuple[np.ndarray, np.ndarray]],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate an averaged house curve from FL+C+FR per-speaker targets.
+
+    Algorithm:
+    1. All input targets are already on the TARGET_FREQUENCIES grid.
+    2. Arithmetic mean across all available speakers at each freq point.
+    3. If only 1 speaker available: return that speaker's target directly.
+    4. If empty: return (empty, empty).
+
+    Args:
+        speaker_targets: Dict mapping commandId -> (freq, target_db).
+
+    Returns:
+        Tuple of (TARGET_FREQUENCIES, merged_target_db).
+    """
+    if not speaker_targets:
+        return np.array([], dtype=float), np.array([], dtype=float)
+
+    cmd_ids = list(speaker_targets.keys())
+    if len(cmd_ids) == 1:
+        freq, target_db = speaker_targets[cmd_ids[0]]
+        return freq.copy(), target_db.copy()
+
+    # Stack all target_db arrays into a matrix (rows=speakers)
+    matrices = []
+    for cmd_id in cmd_ids:
+        _, target_db = speaker_targets[cmd_id]
+        matrices.append(np.asarray(target_db))
+
+    matrix = np.vstack(matrices)  # shape: (n_speakers, n_freqs)
+    merged_db = np.mean(matrix, axis=0)
+
+    return TARGET_FREQUENCIES.copy(), merged_db
+
+
+
+def export_merged_target(
+    freq: np.ndarray,
+    merged_db: np.ndarray,
+    output_dir: str | Path,
+) -> bool:
+    """Write a merged target curve to ``merged_target.frd``.
+
+
+    Args:
+        freq: Frequency bins in Hz.
+        merged_db: Merged target SPL values in dB.
+        output_dir: Directory to write the .frd file into.
+
+
+    Returns:
+        True on success, False on error.
+    """
+    return rew_exporter.export_channel_frd(freq, merged_db, output_dir, "merged_target")
+
+
+
+def push_merged_target_via_api(
+    freq: np.ndarray,
+    merged_db: np.ndarray,
+    host: str = REW_API_DEFAULT_HOST,
+    port: int = REW_API_DEFAULT_PORT,
+) -> bool:
+    """Push merged target to REW via the house curve API.
+
+    Tries /eq/house-curve first (the correct endpoint for house curves).
+    Falls back to /import/frequency-response-data if that fails.
+
+    Args:
+        freq: Frequency bins in Hz.
+        merged_db: Merged target SPL values in dB.
+        host: REW API host. Default: "localhost".
+        port: REW API port. Default: 4735.
+
+
+    Returns:
+        True when REW accepts the data (HTTP 2xx). False otherwise.
+    """
+    url_primary = f"http://{host}:{port}/eq/house-curve"
+    frequency_list = [float(x) for x in np.asarray(freq).flatten()]
+    level_list = [float(x) for x in np.asarray(merged_db).flatten()]
+
+    payload = {
+        "FrequencyResponseData": {
+            "frequency": frequency_list,
+            "level": level_list,
+        }
+    }
+    body = json.dumps(payload).encode("utf-8")
+
+    def try_push(url: str) -> bool:
+        try:
+            req = urllib.request.Request(
+                url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                return resp.status in (200, 202)
+        except Exception:
+            return False
+
+    if try_push(url_primary):
+        return True
+
+    # Fall back to the generic frequency response endpoint
+    return rew_exporter.push_frequency_response_via_api(
+        freq_hz=list(freq),
+        spl_db=list(merged_db),
+        channel_name="merged_target",
         host=host,
         port=port,
     )
