@@ -46,10 +46,10 @@ MAIN_CHANNEL_IDS = frozenset({"fl", "c", "fr"})
 # All positions measured (0 = MLP primary, 1-7 = adjacent/reference positions)
 ALL_POSITIONS = [str(i) for i in range(8)]
 
-# Frequency grid: 1/6-octave steps from 20 Hz to 20 kHz
-# 1/6 octave ≈ 0.167 decades; 20 Hz → 20kHz is 3 decades = ~18 steps per decade
-# Total ≈ 54 points, which is sufficient for house curve.
-_OCTAVE_STEP = 1.0 / 6.0  # 1/6 octave
+# Frequency grid: 1/12-octave steps from 10 Hz to 20 kHz
+# 1/12 octave ≈ 0.0833 decades/step; 10 Hz → 20kHz is 3.3 decades ≈ 40 steps
+# 42 points is sufficient for house curve while keeping the data lean.
+_OCTAVE_STEP = 1.0 / 12.0  # 1/12 octave
 
 
 def _make_target_frequencies() -> np.ndarray:
@@ -117,6 +117,16 @@ class TargetCurveParams:
 
     flat_target_db: float = 0.0
     """dB — target curve reference level. 0 dB means the curve represents a flat/neutral target."""
+
+    target_spl_db: float | None = None
+    """dB SPL — absolute target SPL at midrange. None = auto from measurement ref."""
+
+    subwoofer_ref_offset_db: float = 0.0
+    """dB — shifts subwoofer target relative to measured ref.
+    Positive = lower subwoofer, negative = higher subwoofer."""
+
+    blend_octaves: float = 0.5
+    """Octaves — crossover blend width each side of crossover_freq."""
 
     lf_floor_threshold_db: float = 10.0
     """dB below ref — threshold for detecting the low-frequency floor in subwoofer response."""
@@ -534,24 +544,24 @@ def generate_subwoofer_target(
     )
 
     # Start target at ref_db + shelf_gain (the shelf level)
-    shelf_level = ref_db + params.shelf_gain
+    # Absolute shelf: from measured ref + shelf_gain (base level)
+    # target_spl_db shifts the entire target upward (for absolute SPL calibration)
+    if params.target_spl_db is not None:
+        target_spl = params.target_spl_db
+    else:
+        target_spl = ref_db
+    shelf_level = target_spl + params.shelf_gain
     target = np.full_like(TARGET_FREQUENCIES, shelf_level, dtype=float)
 
-    # Above 80 Hz: blend toward measured response (natural MLP alignment)
+    # Above crossover: blend from shelf_level down to target_spl (absolute midrange)
+    # This connects the subwoofer shelf to the speaker target at crossover.
     crossover = params.crossover_freq
-    above_crossover = TARGET_FREQUENCIES >= crossover
+    above_crossover = TARGET_FREQUENCIES > crossover
     if np.any(above_crossover):
         crossover_idx = int(np.argmax(above_crossover))
-        measured_above = measured_interp[above_crossover]
-        target_above = target[above_crossover]
-
-        # For frequencies above crossover, blend to measured (with smoothing)
-        # Use a simple linear blend: at crossover use target, above use measured
-        # Since target at crossover = ref_db and measured at MLP 80 Hz should
-        # be close to ref_db, the blend is seamless.
         for i in range(crossover_idx, len(TARGET_FREQUENCIES)):
-            if not np.isnan(measured_interp[i]):
-                target[i] = measured_interp[i]
+            t = (i - crossover_idx) / max(1, len(TARGET_FREQUENCIES) - crossover_idx - 1)
+            target[i] = target_spl + (shelf_level - target_spl) * (1.0 - t)
 
     # Below floor: apply smooth taper from shelf_level down to near ref_db
     # Model a gentle HPF slope below the detected floor
@@ -564,17 +574,21 @@ def generate_subwoofer_target(
             if freq < floor_hz:
                 t = (np.log10(freq) - log_min) / log_range  # 0 at bottom, 1 at floor
                 t = max(0.0, min(1.0, t))
-                # Taper from shelf_level at floor to shelf_level - 3 dB at the bottom
-                target[i] = shelf_level - (params.shelf_gain * (1.0 - t))
+                # Taper from shelf_level at floor to target_spl at bottom
+                target[i] = target_spl + (shelf_level - target_spl) * t
 
     # Apply 1/3-octave smoothing
+    # Apply subwoofer reference offset (for calibration)
+    if params.subwoofer_ref_offset_db != 0.0:
+        target = target + params.subwoofer_ref_offset_db
+
     target = smooth_curve(TARGET_FREQUENCIES, target, params.smoothing_octave_final)
 
     return TARGET_FREQUENCIES.copy(), target
 
 
 def generate_all_subwoofer_targets(
-    channel_responses: dict[str, Any],
+    channel_responses: list[dict[str, Any]] | dict[str, Any],
     params: TargetCurveParams,
 ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     """Generate separate target curves for SW1 and SW2.
@@ -595,6 +609,15 @@ def generate_all_subwoofer_targets(
         Dict mapping sw_id -> (freq_hz, spl_db) target curve tuple.
     """
     result: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+
+    # Normalize list input to dict
+    if isinstance(channel_responses, list):
+        channel_dict_norm: dict[str, Any] = {}
+        for c in channel_responses:
+            cid = c.get("commandId", "")
+            if cid:
+                channel_dict_norm[cid.lower()] = c
+        channel_responses = channel_dict_norm
 
     for sw_id, channel_data in channel_responses.items():
         if sw_id.lower() not in SUBWOOFER_IDS:
@@ -762,10 +785,18 @@ def generate_speaker_target(
         TARGET_FREQUENCIES, freq_hz, spl_db, left=np.nan, right=np.nan
     )
 
-    # Start target: flat at ref_db (neutral midrange)
-    target = np.full_like(TARGET_FREQUENCIES, ref_db, dtype=float)
+    # Target SPL at midrange (absolute level for house curve)
+    # Use target_spl_db if set, otherwise fall back to ref_db
+    if params.target_spl_db is not None:
+        target_spl_val = params.target_spl_db
+    else:
+        target_spl_val = ref_db
 
-    # Below cutoff: HPF-style taper that never exceeds measured SPL
+    # Start target: flat at target_spl_val (absolute SPL at midrange)
+    target = np.full_like(TARGET_FREQUENCIES, target_spl_val, dtype=float)
+
+    # Below cutoff: HPF taper from target_spl_val down to target_spl_val - hpf_shelf_gain
+    hpf_gain = getattr(params, 'hpf_shelf_gain', 12.0)
     below_cutoff = TARGET_FREQUENCIES < cutoff_hz
     if np.any(below_cutoff):
         bottom_freq = float(TARGET_FREQUENCIES[below_cutoff][0])
@@ -774,14 +805,13 @@ def generate_speaker_target(
         log_range = log_cutoff - log_bottom
         if log_range <= 0:
             log_range = 1.0
-
         for i, freq in enumerate(TARGET_FREQUENCIES):
             if freq >= cutoff_hz or np.isnan(measured_interp[i]):
                 continue
             t = (np.log10(freq) - log_bottom) / log_range
             t = max(0.0, min(1.0, t))
-            # HPF-style rising taper from 0 at bottom to ref_db at cutoff
-            tapered = ref_db * t
+            tapered = (target_spl_val - hpf_gain) + hpf_gain * t
+            # Target must not exceed measured (prevents over-correction)
             target[i] = min(tapered, float(measured_interp[i]))
 
     # Apply 1/3-octave smoothing to the full target
@@ -794,6 +824,16 @@ def generate_speaker_target(
         start_hz=params.tilt_start_hz,
         tilt_rate=params.tilt_rate,
     )
+
+    # Enforce: target must not exceed measured (prevents over-correction
+    # below cutoff where 1/3-octave smoothing can introduce overshoot)
+    for i in range(len(target)):
+        if not np.isnan(measured_interp[i]) and target[i] > measured_interp[i] + 0.01:
+            target[i] = measured_interp[i]
+            # Spread to neighbors for smooth transitions
+            for j in range(max(0, i - 1), min(len(target), i + 2)):
+                if not np.isnan(measured_interp[j]) and target[j] > measured_interp[j] + 0.01:
+                    target[j] = measured_interp[j]
 
     return TARGET_FREQUENCIES.copy(), target
 
@@ -902,6 +942,87 @@ def push_speaker_target_via_api(
 # -----------------------------------------------------------------------------
 # Merged Target Curve
 # -----------------------------------------------------------------------------
+def generate_house_curve(
+    channel_responses: list[dict[str, Any]] | dict[str, Any],
+    params: TargetCurveParams | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate the complete house curve from speaker + subwoofer measurements.
+
+    The house curve is the single target that REW applies globally for EQ.
+    It is built from BOTH the subwoofer (deep bass) and the speakers
+    (midrange + treble), blended smoothly at the crossover frequency.
+
+    Algorithm:
+    1. Speaker targets (FL/C/FR): HPF-shaped per-channel, flat midrange, HF tilt.
+    2. Subwoofer targets (SW1/SW2): MLP-only, LPF-shaped bass shelf with
+       absolute SPL from target_spl_db (or measured reference).
+    3. Merge subwoofers: average SW1 + SW2 for a single subwoofer curve.
+    4. Merge speakers: arithmetic mean of FL + C + FR for a single speaker curve.
+    5. Blend subwoofer and speaker curves at crossover_freq with smooth
+       log-frequency crossover (+/- blend_octaves).
+
+    Below xf_low: subwoofer dominates (deep bass)
+    Above xf_high: speaker dominates (midrange + treble)
+    Between xf_low and xf_high: smooth log-freq blend.
+
+    Args:
+        channel_responses: Full channel_responses from ady_parser.
+        params: TargetCurveParams. Uses defaults if None.
+
+    Returns:
+        Tuple of (TARGET_FREQUENCIES, house_curve_db).
+    """
+    if params is None:
+        params = TargetCurveParams()
+
+    crossover = params.crossover_freq
+    blend = params.blend_octaves
+    xf_low = crossover / (2.0 ** blend)
+    xf_high = crossover * (2.0 ** blend)
+
+    # Per-channel speaker targets (FL/C/FR)
+    speaker_targets = generate_all_speaker_targets(channel_responses, params)
+
+    # Per-channel subwoofer targets (SW1/SW2)
+    subwoofer_targets = generate_all_subwoofer_targets(channel_responses, params)
+
+    if not speaker_targets and not subwoofer_targets:
+        return np.array([], dtype=float), np.array([], dtype=float)
+
+    # Single subwoofer curve: average SW1 + SW2
+    if subwoofer_targets:
+        sw_matrices = [np.asarray(t[1]) for t in subwoofer_targets.values()]
+        sw_merged = np.mean(np.vstack(sw_matrices), axis=0)
+    else:
+        sw_merged = None
+
+    # Single speaker curve: average FL + C + FR
+    if speaker_targets:
+        spk_matrices = [np.asarray(t[1]) for t in speaker_targets.values()]
+        spk_merged = np.mean(np.vstack(spk_matrices), axis=0)
+    else:
+        spk_merged = None
+
+    # Build house curve with smooth log-frequency crossover blend
+    house = np.zeros_like(TARGET_FREQUENCIES, dtype=float)
+    if sw_merged is not None and spk_merged is not None:
+        for i, f in enumerate(TARGET_FREQUENCIES):
+            if f < xf_low:
+                house[i] = sw_merged[i]
+            elif f > xf_high:
+                house[i] = spk_merged[i]
+            else:
+                t = (np.log10(f / xf_low) / np.log10(xf_high / xf_low))
+                t = max(0.0, min(1.0, t))
+                house[i] = sw_merged[i] * (1.0 - t) + spk_merged[i] * t
+    elif sw_merged is not None:
+        house = sw_merged.copy()
+    else:
+        house = spk_merged.copy()
+
+    house = smooth_curve(TARGET_FREQUENCIES, house, params.smoothing_octave_final)
+    return TARGET_FREQUENCIES.copy(), house
+
 
 def generate_merged_target(
     speaker_targets: dict[str, tuple[np.ndarray, np.ndarray]],
