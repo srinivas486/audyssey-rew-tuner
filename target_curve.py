@@ -509,13 +509,15 @@ def push_target_curve_via_api(
         host = "127.0.0.1"
     url = f"http://{host}:{port}/eq/house-curve"
 
-    payload = resolved.encode("utf-8")
+    # REW expects form-encoded data with a "path" field
+    import urllib.parse
+    payload = urllib.parse.urlencode({"path": resolved}).encode("utf-8")
 
     try:
         req = urllib.request.Request(
             url,
             data=payload,
-            headers={"Content-Type": "text/plain"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
