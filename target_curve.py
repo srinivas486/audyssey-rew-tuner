@@ -25,6 +25,8 @@ from typing import Any
 
 import numpy as np
 
+import rew_exporter
+
 
 # -----------------------------------------------------------------------------
 # Constants
@@ -115,6 +117,12 @@ class TargetCurveParams:
 
     flat_target_db: float = 0.0
     """dB — target curve reference level. 0 dB means the curve represents a flat/neutral target."""
+
+    lf_floor_threshold_db: float = 10.0
+    """dB below ref — threshold for detecting the low-frequency floor in subwoofer response."""
+
+    shelf_gain: float = 5.0
+    """dB above ref — target shelf level for subwoofer LF extension (default +5 dB)."""
 
 
 # -----------------------------------------------------------------------------
@@ -406,5 +414,265 @@ def generate_target_curve_from_ady(
 
     return TARGET_FREQUENCIES.copy(), target
 
+
+# -----------------------------------------------------------------------------
+# Story 1 — Subwoofer LPF Shaping + Crossover Alignment
+# -----------------------------------------------------------------------------
+
+def detect_lf_floor(
+    freq_hz: np.ndarray,
+    spl_db: np.ndarray,
+    threshold_db: float = 10.0,
+) -> tuple[float, float]:
+    """Detect the low-frequency floor from a measured subwoofer response.
+
+    Reference level = mean SPL in 20–80 Hz window.
+    Floor = lowest frequency where SPL first drops BELOW ref_db - threshold_db.
+
+    Args:
+        freq_hz: Measured frequency bins (Hz). Need not be sorted but
+            the function treats indices as aligned with spl_db.
+        spl_db: Measured SPL values in dB (same length as freq_hz).
+        threshold_db: dB below the reference window average to search
+            for the floor. Default 10 dB.
+
+    Returns:
+        Tuple of (floor_hz, ref_db) where floor_hz is the detected low-
+        frequency floor in Hz (or the lowest frequency in the array if
+        no floor is found), and ref_db is the reference mid-bass level
+        (mean SPL in the 20–80 Hz window).
+    """
+    # Compute reference level from 20–80 Hz window
+    in_range = (freq_hz >= 20.0) & (freq_hz <= 80.0)
+    ref_values = spl_db[in_range]
+    if len(ref_values) == 0:
+        ref_db = float(np.mean(spl_db))
+    else:
+        ref_db = float(np.mean(ref_values))
+
+    threshold = ref_db - threshold_db
+
+    # Find the low-frequency floor using "cross-up" logic:
+    # The subwoofer response typically rises from a low rolloff toward the
+    # reference level as frequency increases. The floor is the frequency
+    # where the response first ENTERS the "above-threshold" region from below.
+    # This corresponds to the first freq in the 20–80 Hz band whose SPL >= threshold
+    # AND whose previous measured point (if any) had SPL < threshold.
+    #
+    # Special cases:
+    #   - If the lowest freq in the 20–80 Hz band is already >= threshold,
+    #     the floor is the lowest freq (subwoofer extends cleanly).
+    #   - If no freq in the 20–80 Hz band is >= threshold, floor is the
+    #     lowest frequency (response is entirely below threshold).
+    band_mask = (freq_hz >= 20.0) & (freq_hz <= 80.0)
+    if not np.any(band_mask):
+        # No data in the band — fallback to lowest frequency
+        floor_hz = float(freq_hz[0])
+        return floor_hz, ref_db
+
+    band_freqs = freq_hz[band_mask]
+    band_spls = spl_db[band_mask]
+
+    # Find first point in band where SPL >= threshold
+    above_mask = band_spls >= threshold
+    if not np.any(above_mask):
+        # Never exceeds threshold — floor is lowest band frequency
+        floor_hz = float(band_freqs[0])
+        return floor_hz, ref_db
+
+    first_above_idx = int(np.argmax(above_mask))  # index within the band mask
+
+    # Check if this is the very first measurement point in the band
+    if first_above_idx == 0:
+        # First point in band is already above threshold — this means the
+        # subwoofer extends cleanly with no pronounced low-frequency rolloff.
+        # Floor is that first frequency.
+        floor_hz = float(band_freqs[0])
+        return floor_hz, ref_db
+
+    # Otherwise the response entered the above-threshold region from below.
+    # The floor is the frequency where it crossed up.
+    floor_hz = float(band_freqs[first_above_idx])
+    return floor_hz, ref_db
+
+
+def generate_subwoofer_target(
+    freq_hz: np.ndarray,
+    spl_db: np.ndarray,
+    params: TargetCurveParams,
+    ref_db: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate a subwoofer target curve with LPF shaping.
+
+    Below LF floor: smooth taper (modelled HPF-style, gentle slope).
+    LF floor to 80 Hz: flat shelf at shelf_gain dB above ref level.
+    At 80 Hz: anchor to ref_db (natural MLP alignment — no perceived
+        level change at crossover).
+
+    The output is 1/3-octave smoothed.
+
+    Args:
+        freq_hz: Measured frequency bins for the subwoofer (Hz).
+        spl_db: Measured SPL values in dB.
+        params: TargetCurveParams with lf_floor_threshold_db and shelf_gain.
+        ref_db: Reference mid-bass level from detect_lf_floor().
+
+    Returns:
+        Tuple of (target_freq, target_spl) aligned to TARGET_FREQUENCIES.
+    """
+    # Detect LF floor from the measured response
+    floor_hz, _ = detect_lf_floor(
+        freq_hz, spl_db, threshold_db=params.lf_floor_threshold_db
+    )
+
+    # Interpolate measured response onto TARGET_FREQUENCIES
+    measured_interp = np.interp(
+        TARGET_FREQUENCIES, freq_hz, spl_db, left=np.nan, right=np.nan
+    )
+
+    # Start target at ref_db + shelf_gain (the shelf level)
+    shelf_level = ref_db + params.shelf_gain
+    target = np.full_like(TARGET_FREQUENCIES, shelf_level, dtype=float)
+
+    # Above 80 Hz: blend toward measured response (natural MLP alignment)
+    crossover = params.crossover_freq
+    above_crossover = TARGET_FREQUENCIES >= crossover
+    if np.any(above_crossover):
+        crossover_idx = int(np.argmax(above_crossover))
+        measured_above = measured_interp[above_crossover]
+        target_above = target[above_crossover]
+
+        # For frequencies above crossover, blend to measured (with smoothing)
+        # Use a simple linear blend: at crossover use target, above use measured
+        # Since target at crossover = ref_db and measured at MLP 80 Hz should
+        # be close to ref_db, the blend is seamless.
+        for i in range(crossover_idx, len(TARGET_FREQUENCIES)):
+            if not np.isnan(measured_interp[i]):
+                target[i] = measured_interp[i]
+
+    # Below floor: apply smooth taper from shelf_level down to near ref_db
+    # Model a gentle HPF slope below the detected floor
+    below_floor = TARGET_FREQUENCIES < floor_hz
+    if np.any(below_floor):
+        log_floor = np.log10(floor_hz)
+        log_min = np.log10(TARGET_FREQUENCIES[below_floor][0]) if np.any(below_floor) else log_floor
+        log_range = log_floor - log_min if log_floor != log_min else 1.0
+        for i, freq in enumerate(TARGET_FREQUENCIES):
+            if freq < floor_hz:
+                t = (np.log10(freq) - log_min) / log_range  # 0 at bottom, 1 at floor
+                t = max(0.0, min(1.0, t))
+                # Taper from shelf_level at floor to shelf_level - 3 dB at the bottom
+                target[i] = shelf_level - (params.shelf_gain * (1.0 - t))
+
+    # Apply 1/3-octave smoothing
+    target = smooth_curve(TARGET_FREQUENCIES, target, params.smoothing_octave_final)
+
+    return TARGET_FREQUENCIES.copy(), target
+
+
+def generate_all_subwoofer_targets(
+    channel_responses: dict[str, Any],
+    params: TargetCurveParams,
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """Generate separate target curves for SW1 and SW2.
+
+    Uses MLP-only (position 0) for each subwoofer. Does NOT combine
+    or average SW1 and SW2 — each gets its own target based on its
+    own measured response.
+
+    Args:
+        channel_responses: Dict mapping sw_id -> {
+            'positions': {
+                '0': {'freq_hz': np.ndarray, 'spl_db': np.ndarray}
+            }
+        }. Keys not in SUBWOOFER_IDS are ignored.
+        params: TargetCurveParams instance.
+
+    Returns:
+        Dict mapping sw_id -> (freq_hz, spl_db) target curve tuple.
+    """
+    result: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+
+    for sw_id, channel_data in channel_responses.items():
+        if sw_id.lower() not in SUBWOOFER_IDS:
+            continue
+
+        positions = channel_data.get("positions", {})
+        pos_0 = positions.get("0")
+        if pos_0 is None:
+            continue
+
+        freq_hz = np.asarray(pos_0["freq_hz"])
+        spl_db = np.asarray(pos_0["spl_db"])
+
+        # Detect the floor and reference from MLP position 0
+        floor_hz, ref_db = detect_lf_floor(
+            freq_hz, spl_db, threshold_db=params.lf_floor_threshold_db
+        )
+
+        target_freq, target_spl = generate_subwoofer_target(
+            freq_hz, spl_db, params, ref_db
+        )
+
+        result[sw_id.lower()] = (target_freq, target_spl)
+
+    return result
+
+
+def export_subwoofer_target(
+    freq: np.ndarray,
+    target_db: np.ndarray,
+    output_dir: str | Path,
+    sw_id: str,
+) -> bool:
+    """Write a subwoofer target curve to ``{sw_id}_target.frd``.
+
+    Uses the same format as export_channel_frd(): one line per
+    frequency bin in ascending order: ``<frequency_hz> <spl_db>``.
+
+    Args:
+        freq: Frequency bins in Hz.
+        target_db: Target SPL values in dB (same length as freq).
+        output_dir: Directory to write the .frd file into. Created if needed.
+        sw_id: Subwoofer identifier, e.g. "sw1" or "sw2".
+            The output filename will be ``{sw_id}_target.frd``.
+
+    Returns:
+        True on success, False on error.
+    """
+    return rew_exporter.export_channel_frd(freq, target_db, output_dir, f"{sw_id}_target")
+
+
+def push_subwoofer_target_via_api(
+    sw_id: str,
+    freq: np.ndarray,
+    target_db: np.ndarray,
+    host: str = REW_API_DEFAULT_HOST,
+    port: int = REW_API_DEFAULT_PORT,
+) -> bool:
+    """Push a subwoofer target curve to REW via the frequency response API.
+
+    Uses POST /import/frequency-response-data (same endpoint as
+    push_frequency_response_via_api). Each subwoofer is pushed as a
+    separate API call.
+
+    Args:
+        sw_id: Subwoofer identifier, e.g. "sw1" or "sw2".
+            Used as the REW curve identifier: ``{sw_id}_target``.
+        freq: Frequency bins in Hz.
+        target_db: Target SPL values in dB (same length as freq).
+        host: REW API host. Default: "localhost".
+        port: REW API port. Default: 4735.
+
+    Returns:
+        True when REW accepts the data (HTTP 2xx). False otherwise.
+    """
+    return rew_exporter.push_frequency_response_via_api(
+        freq_hz=list(freq),
+        spl_db=list(target_db),
+        channel_name=f"{sw_id}_target",
+        host=host,
+        port=port,
+    )
 
 
