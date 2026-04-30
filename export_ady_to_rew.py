@@ -6,15 +6,15 @@ Usage::
     python export_ady_to_rew.py <path-to.ady> [--output-dir ./output]
                                      [--api-host localhost]
                                      [--api-port 4735]
-                                     [--no-export]     skip .frd file export
+                                     [--export]        write .frd files to --output-dir
                                      [--no-push]       skip REW API push
-                                     [--ir]            push impulse response data (all channels)
+                                     [--ir]            include impulse response data (default: frequency response only)
 
 Examples::
 
-    python export_ady_to_rew.py test.ady --output-dir ./output
-    python export_ady_to_rew.py test.ady --ir           # push impulse response to REW
-    python export_ady_to_rew.py test.ady                 # push frequency response (default)
+    python export_ady_to_rew.py test.ady                 # push IR to REW (default)
+    python export_ady_to_rew.py test.ady --export        # also write .frd files to --output-dir
+    python export_ady_to_rew.py test.ady --no-push --export  # export .frd only (no REW push)
 """
 
 from __future__ import annotations
@@ -54,9 +54,10 @@ def main() -> None:
         help="REW API port (default: 4735)",
     )
     parser.add_argument(
-        "--no-export",
+        "--export",
         action="store_true",
-        help="Skip writing .frd files",
+        default=False,
+        help="Also write .frd files to --output-dir (disabled by default; REW API push is default)",
     )
     parser.add_argument(
         "--no-push",
@@ -138,7 +139,7 @@ def main() -> None:
         spl = list(avg["spl_db"])      # np.ndarray → plain list
 
         # --- .frd export ---
-        if not args.no_export:
+        if args.export:
             ok = export_channel_frd(freq, spl, args.output_dir, cmd_id)
             status = "✓" if ok else "✗"
             print(f"  [{status}] .frd export: {cmd_id}")
@@ -159,7 +160,7 @@ def main() -> None:
 
     # Summary
     print()
-    if not args.no_export:
+    if args.export:
         print(f".frd export: {'PASS' if frd_ok else 'FAIL'}")
     if not args.no_push:
         push_status = 'PASS' if api_ok else 'FAIL'
