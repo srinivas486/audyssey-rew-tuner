@@ -946,24 +946,16 @@ def generate_house_curve(
     channel_responses: list[dict[str, Any]] | dict[str, Any],
     params: TargetCurveParams | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate the complete house curve from speaker + subwoofer measurements.
+    """Generate the house curve from ADY measurements.
 
-    The house curve is the single target that REW applies globally for EQ.
-    It is built from BOTH the subwoofer (deep bass) and the speakers
-    (midrange + treble), blended smoothly at the crossover frequency.
+    The house curve follows the Harman research target curve — a PREFERRED
+    response shape independent of what was measured:
+      - Bass shelf: +5 dB at 20 Hz, rolling off to 0 dB at 80 Hz
+      - Neutral midrange (0 dB relative)
+      - High-frequency downward tilt: -1.5 dB/decade above 2 kHz
 
-    Algorithm:
-    1. Speaker targets (FL/C/FR): HPF-shaped per-channel, flat midrange, HF tilt.
-    2. Subwoofer targets (SW1/SW2): MLP-only, LPF-shaped bass shelf with
-       absolute SPL from target_spl_db (or measured reference).
-    3. Merge subwoofers: average SW1 + SW2 for a single subwoofer curve.
-    4. Merge speakers: arithmetic mean of FL + C + FR for a single speaker curve.
-    5. Blend subwoofer and speaker curves at crossover_freq with smooth
-       log-frequency crossover (+/- blend_octaves).
-
-    Below xf_low: subwoofer dominates (deep bass)
-    Above xf_high: speaker dominates (midrange + treble)
-    Between xf_low and xf_high: smooth log-freq blend.
+    When ``target_spl_db`` is set, the curve is shifted so the midrange
+    (200–500 Hz geometric mean) sits at that absolute SPL level.
 
     Args:
         channel_responses: Full channel_responses from ady_parser.
@@ -975,53 +967,85 @@ def generate_house_curve(
     if params is None:
         params = TargetCurveParams()
 
-    crossover = params.crossover_freq
-    blend = params.blend_octaves
-    xf_low = crossover / (2.0 ** blend)
-    xf_high = crossover * (2.0 ** blend)
+    # Build Harman-style target shape: 0 dB neutral + bass shelf + HF tilt
+    target = np.zeros_like(TARGET_FREQUENCIES)
 
-    # Per-channel speaker targets (FL/C/FR)
-    speaker_targets = generate_all_speaker_targets(channel_responses, params)
+    # Bass shelf: +5 dB at 20 Hz, rolls off to 0 dB at 80 Hz
+    target = apply_bass_shelf(
+        TARGET_FREQUENCIES,
+        target,
+        start_hz=params.bass_shelf_start,
+        gain_db=params.bass_shelf_gain,
+        ref_hz=20.0,
+    )
 
-    # Per-channel subwoofer targets (SW1/SW2)
-    subwoofer_targets = generate_all_subwoofer_targets(channel_responses, params)
+    # HF tilt: gentle downward slope above 2 kHz
+    target = apply_hf_tilt(
+        TARGET_FREQUENCIES,
+        target,
+        start_hz=params.tilt_start_hz,
+        tilt_rate=params.tilt_rate,
+    )
 
-    if not speaker_targets and not subwoofer_targets:
-        return np.array([], dtype=float), np.array([], dtype=float)
+    # Optional absolute SPL calibration
+    if params.target_spl_db is not None:
+        measured_ref = _get_measured_midrange_ref(channel_responses)
+        if measured_ref is not None:
+            target = target + (params.target_spl_db - measured_ref)
 
-    # Single subwoofer curve: average SW1 + SW2
-    if subwoofer_targets:
-        sw_matrices = [np.asarray(t[1]) for t in subwoofer_targets.values()]
-        sw_merged = np.mean(np.vstack(sw_matrices), axis=0)
-    else:
-        sw_merged = None
+    # 1/3-octave smoothing
+    target = smooth_curve(TARGET_FREQUENCIES, target, params.smoothing_octave_final)
 
-    # Single speaker curve: average FL + C + FR
-    if speaker_targets:
-        spk_matrices = [np.asarray(t[1]) for t in speaker_targets.values()]
-        spk_merged = np.mean(np.vstack(spk_matrices), axis=0)
-    else:
-        spk_merged = None
+    return TARGET_FREQUENCIES.copy(), target
 
-    # Build house curve with smooth log-frequency crossover blend
-    house = np.zeros_like(TARGET_FREQUENCIES, dtype=float)
-    if sw_merged is not None and spk_merged is not None:
-        for i, f in enumerate(TARGET_FREQUENCIES):
-            if f < xf_low:
-                house[i] = sw_merged[i]
-            elif f > xf_high:
-                house[i] = spk_merged[i]
-            else:
-                t = (np.log10(f / xf_low) / np.log10(xf_high / xf_low))
-                t = max(0.0, min(1.0, t))
-                house[i] = sw_merged[i] * (1.0 - t) + spk_merged[i] * t
-    elif sw_merged is not None:
-        house = sw_merged.copy()
-    else:
-        house = spk_merged.copy()
 
-    house = smooth_curve(TARGET_FREQUENCIES, house, params.smoothing_octave_final)
-    return TARGET_FREQUENCIES.copy(), house
+def _get_measured_midrange_ref(
+    channel_responses: list[dict[str, Any]] | dict[str, Any],
+) -> float | None:
+    """Return the geometric-mean midrange SPL (200–500 Hz) from MLP of FL.
+
+    This is used to calibrate the target curve to an absolute SPL level
+    when target_spl_db is set.
+
+    Args:
+        channel_responses: Full channel_responses from ady_parser.
+
+    Returns:
+        Midrange reference level in dB, or None if no speaker data found.
+    """
+    # Normalize list to dict
+    if isinstance(channel_responses, list):
+        ch_map: dict[str, Any] = {}
+        for c in channel_responses:
+            cid = c.get("commandId", "")
+            if cid:
+                ch_map[cid.lower()] = c
+        channel_responses = ch_map
+
+    # Use FL MLP position 0 as the reference
+    fl = channel_responses.get("fl") or channel_responses.get("c")
+    if fl is None:
+        return None
+
+    positions = fl.get("positions", {})
+    pos_0 = positions.get("0")
+    if pos_0 is None:
+        return None
+
+    freq_hz = np.asarray(pos_0["freq_hz"])
+    spl_db = np.asarray(pos_0["spl_db"])
+
+    band_mask = (freq_hz >= 200.0) & (freq_hz <= 500.0)
+    if not np.any(band_mask):
+        return None
+
+    # Geometric mean in dB
+    band_spls = spl_db[band_mask]
+    energy_sum = np.mean(10.0 ** (band_spls / 10.0))
+    ref_db = 10.0 * np.log10(max(energy_sum, 1e-12))
+    return float(ref_db)
+
+
 
 
 def generate_merged_target(
