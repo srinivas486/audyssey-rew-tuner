@@ -1,0 +1,41 @@
+"""
+    resolved = str(Path(path).resolve())
+
+    if host in ("localhost", "127.0.0.1"):
+        host = "127.0.0.1"
+    url = f"http://{host}:{port}/eq/house-curve"
+
+    # Try all known formats: raw string, JSON with path key, form-encoded
+    import json
+    candidates = [
+        # Candidate 1: raw path as plain string
+        ("text/plain", resolved.encode("utf-8")),
+        # Candidate 2: JSON object {"path": "/absolute/path"}
+        ("application/json", json.dumps({"path": resolved}).encode("utf-8")),
+        # Candidate 3: form-encoded path=...
+        ("application/x-www-form-urlencoded", f"path={resolved}".encode("utf-8")),
+    ]
+    last_err = None
+    for ctype, payload in candidates:
+        try:
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={"Content-Type": ctype},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                status = resp.status
+                print(f"  [✓] Target curve loaded into REW (HTTP {status}): {resolved}")
+                return True
+        except urllib.error.HTTPError as e:
+            last_err = f"HTTP {e.code}: {e.read().decode('utf-8', errors='replace')[:200]}"
+        except urllib.error.URLError as e:
+            last_err = f"connection error: {e.reason}"
+            break  # don't try more formats on connection error
+        except OSError as e:
+            last_err = f"connection error: {e}"
+            break
+
+    print(f"  [✗] REW house-curve API failed (tried all formats): {last_err}")
+    return False

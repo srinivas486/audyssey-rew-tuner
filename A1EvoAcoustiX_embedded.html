@@ -1,0 +1,1167 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<!--
+
+Copyright (c) 2026 OCA https://www.youtube.com/@OCAudiophile
+
+All Rights Reserved.
+
+This software is provided free of charge for personal, non-commercial use only.
+
+By using this software, you agree to the following terms:
+
+- Personal Use: You are granted a license to use this software for personal, private, and non-commercial purposes only.
+- No Distribution: You may not distribute, share, or make this software available to any third party in any form or medium.
+- No Modifications: You may not modify, adapt, reverse engineer, decompile, or create derivative works based on this software.
+- No Commercial Use: You may not use this software for any commercial purposes whatsoever.
+- Ownership: All rights, title, and interest in and to the software, including its algorithms and structure, are and shall remain the exclusive property of the author (OCA).
+
+Disclaimer:
+
+- This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement.
+- In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software.
+- Use at your own risk.
+
+-->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evo Custom</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.js"></script>
+<style>
+  :root {
+    --primary-color: #ffb300;
+    --primary-bright: #ffca28;
+    --primary-dim: rgba(255, 179, 0, 0.15);
+    --bg-gradient-start: #212121;
+    --bg-gradient-end: #1a1a1a;
+    --card-bg: #263238;
+    --panel-bg: #1c2429;
+    --text-main: #eceff1;
+    --text-muted: #90a4ae;
+    --track-bg: #37474f;
+    --border-light: rgba(255, 255, 255, 0.08);
+  }
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: radial-gradient(circle at center, var(--bg-gradient-start), var(--bg-gradient-end));
+    color: var(--text-main);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    min-height: 100vh;
+    margin: 0;
+    font-size: 13px;
+  }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: #1a1a1a; }
+  ::-webkit-scrollbar-thumb { background: #546e7a; border-radius: 4px; }
+  .container {
+    width: 100%;
+    max-width: 1400px;
+    background: linear-gradient(145deg, #2d3940, #263238);
+    border-radius: 12px;
+    padding: 25px 35px;
+    box-shadow:
+    0 20px 50px rgba(0,0,0,0.6),
+    inset 0 1px 1px rgba(255,255,255,0.1);
+    border: 1px solid #000;
+    display: flex;
+    flex-direction: column;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    border-bottom: 2px solid var(--border-light);
+    padding-bottom: 15px;
+  }
+  .header-left { display: flex; align-items: baseline; gap: 15px; }
+  h1 {
+    color: var(--text-main);
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  h1 span { color: var(--primary-color); font-weight: 300; }
+  .header-controls { display: flex; align-items: center; gap: 15px; }
+  .support-btn {
+    display: flex; align-items: center; gap: 6px;
+    text-decoration: none;
+    color: var(--primary-color);
+    border: 1px solid rgba(255, 179, 0, 0.3);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    background: rgba(0,0,0,0.2);
+  }
+  .support-btn:hover {
+    background: var(--primary-dim);
+    box-shadow: 0 0 12px rgba(255, 179, 0, 0.2);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+  }
+  .heart-icon { font-size: 12px; }
+  .close-btn {
+    font-size: 24px;
+    color: var(--text-muted);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    transition: 0.2s;
+  }
+  .close-btn:hover { color: #ff5252; transform: scale(1.1); }
+  h2 {
+    color: var(--primary-color);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+  }
+  h2::after {
+    content: ''; flex: 1; height: 1px; background: var(--border-light); margin-left: 15px;
+  }
+  .main-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 30px;
+  }
+  .column {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 15px;
+    border: 1px solid rgba(255,255,255,0.03);
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+  }
+  .form-group {
+    background: var(--panel-bg);
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    border-left: 3px solid transparent;
+    transition: border-left-color 0.3s, background 0.3s;
+  }
+  .form-group:hover {
+    background: #232d33;
+    border-left-color: var(--primary-color);
+  }
+  .form-group.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    background: #151a1e;
+    border-left-color: #455a64;
+  }
+  .form-group.locked-active {
+    opacity: 0.8;
+    pointer-events: none;
+    border-left-color: var(--primary-color);
+  }
+  label { display: block; margin-bottom: 2px; font-weight: 600; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .label-with-toggle { display: flex; justify-content: space-between; align-items: center; }
+  select {
+    width: 100%; padding: 8px 12px;
+    background: #121212; border: 1px solid #455a64;
+    color: #fff; border-radius: 4px; font-size: 12px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+  }
+  select:focus { border-color: var(--primary-color); outline: none; }
+  .toggle-switch { position: relative; display: inline-block; width: 42px; height: 22px; }
+  .toggle-switch input { display: none; }
+  .slider-round {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #37474f; transition: .2s; border-radius: 2px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .slider-round:before {
+    position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
+    background: #90a4ae; transition: .2s; border-radius: 1px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  input:checked + .slider-round { background-color: #2e3d44; }
+  input:checked + .slider-round:before {
+    transform: translateX(20px);
+    background-color: var(--primary-color);
+    box-shadow: 0 0 10px var(--primary-color);
+  }
+  .range-slider-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+  .range-slider-group output {
+    color: var(--primary-bright); font-family: 'Consolas', monospace;
+    font-size: 11px; background: #000; padding: 2px 6px; border-radius: 2px;
+    border: 1px solid #37474f;
+  }
+  input[type="range"].single-slider {
+    -webkit-appearance: none; width: 100%; height: 6px; background: #121212;
+    border-radius: 3px; outline: none; margin-top: 5px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.8); border: 1px solid #37474f;
+  }
+  input[type="range"].single-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 22px;
+    background: linear-gradient(to bottom, #546e7a, #37474f);
+    border: 1px solid #78909c; border-radius: 2px; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-top: -1px;
+  }
+  input[type="range"].single-slider:hover::-webkit-slider-thumb { background: linear-gradient(to bottom, var(--primary-color), #ff8f00); border-color: #fff; }
+  .crossover-slider { position: relative; height: 24px; margin-top: 5px; }
+  .crossover-slider .track {
+    position: absolute; width: 100%; height: 6px;
+    background: #121212; border-radius: 3px; top: 50%; transform: translateY(-50%);
+    z-index: 1; box-shadow: inset 0 1px 3px rgba(0,0,0,0.8); border: 1px solid #37474f;
+  }
+  .crossover-slider .track-infill {
+    position: absolute; height: 6px;
+    background: var(--primary-color);
+    box-shadow: 0 0 8px rgba(255, 179, 0, 0.4);
+    border-radius: 3px; top: 50%; transform: translateY(-50%);
+    z-index: 2; pointer-events: none;
+  }
+  .crossover-slider input[type="range"] {
+    -webkit-appearance: none; position: absolute; width: 100%;
+    background: none; pointer-events: none; z-index: 3;
+    margin: 0; top: 50%; transform: translateY(-50%);
+  }
+  .crossover-slider input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 22px;
+    background: #cfd8dc; cursor: pointer; border-radius: 2px;
+    border: 1px solid #000; pointer-events: auto;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+  }
+  .crossover-slider input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 22px;
+    background: #cfd8dc; cursor: pointer; border-radius: 2px;
+    border: 1px solid #000; pointer-events: auto;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    transform: translateY(0);
+  }
+  .crossover-slider input[type="range"]::-webkit-slider-thumb:hover {
+    background: #fff; transform: scale(1.1);
+  }
+  .button-group { text-align: right; margin-top: 20px; border-top: 1px solid var(--border-light); padding-top: 20px; }
+  button.save-btn {
+    padding: 14px 32px;
+    border: none; border-radius: 4px; cursor: pointer;
+    font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    background: linear-gradient(to bottom, var(--primary-color), #ff8f00);
+    color: #263238;
+    box-shadow: 0 4px 0 #c46e00, 0 10px 20px rgba(0,0,0,0.4);
+    transition: all 0.2s;
+  }
+  button.save-btn:hover { transform: translateY(2px); box-shadow: 0 2px 0 #c46e00, 0 5px 10px rgba(0,0,0,0.4); filter: brightness(1.1); }
+  button.save-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #c46e00, inset 0 2px 5px rgba(0,0,0,0.2); }
+  .checkbox-group label { display: inline-flex; align-items: center; margin-right: 15px; font-size: 11px; color: var(--text-main); cursor: pointer; opacity: 0.8; }
+  .checkbox-group label:hover { opacity: 1; }
+  .checkbox-group input[type="checkbox"] { margin-right: 8px; accent-color: var(--primary-color); }
+  .locked-badge {
+    font-size: 9px; color: #000; background: var(--primary-color);
+    padding: 2px 4px; border-radius: 2px; margin-right: 8px; font-weight: bold;
+    display: none;
+  }
+  .locked-active .locked-badge { display: inline-block; }
+  canvas { filter: drop-shadow(0 0 5px rgba(0,0,0,0.5)); }
+  .tooltip-container { position: relative; display: inline-block; }
+  .tooltip-text {
+    visibility: hidden; opacity: 0; pointer-events: none;
+    position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%) translateY(5px);
+    background: #1a1a1a; color: #fff; padding: 10px 15px; border-radius: 4px;
+    width: 260px; font-size: 11px; line-height: 1.5;
+    border: 1px solid var(--primary-color);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    transition: all 0.2s ease; z-index: 9999; white-space: normal; text-align: center;
+  }
+  .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; transform: translateX(-50%) translateY(0); }
+  .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: var(--primary-color) transparent transparent transparent; }
+  #bass-shaker-controls-wrapper.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+  <div class="header-left">
+  <h1>A1 Evo <span>AcoustiX</span></h1>
+  </div>
+  <div class="header-controls">
+  <a href="https://revolut.me/serko70" target="_blank" class="support-btn" title="Voluntary donation">
+  <span class="heart-icon">♥</span> Support project
+  </a>
+  <button class="close-btn" onclick="window.close();" title="Close Window">&times;</button>
+  </div>
+  </div>
+  <form id="settings-form">
+  <div class="main-content">
+  <div class="column">
+  <h2>Target Response</h2>
+  <div class="form-group">
+  <label for="targetCurve">Target Curve File</label>
+  <select id="targetCurve" name="targetCurve"></select>
+  </div>
+  <div class="form-group" style="height: 180px; padding: 10px; background: #121212; border: 1px solid #37474f;">
+  <canvas id="curveChart"></canvas>
+  </div>
+  <h2>Crossover Frequency Search Range</h2>
+  <div class="form-group" id="frontsXOGroup">
+    <!-- Added id="lbl_frontsXO" below -->
+    <div class="range-slider-group"><label id="lbl_frontsXO">Fronts Range</label><output>40 Hz - 250 Hz</output></div>
+    <div class="crossover-slider"><div class="track"></div><div class="track-infill"></div><input type="range" name="frontsCrossoverMin" min="40" max="250" value="40"><input type="range" name="frontsCrossoverMax" min="40" max="250" value="250"></div>
+  </div>
+  <div class="form-group" id="centerXOGroup">
+    <!-- Added id="lbl_centerXO" below -->
+    <div class="range-slider-group"><label id="lbl_centerXO">Center Range</label><output>40 Hz - 250 Hz</output></div>
+    <div class="crossover-slider"><div class="track"></div><div class="track-infill"></div><input type="range" name="centerCrossoverMin" min="40" max="250" value="40"><input type="range" name="centerCrossoverMax" min="40" max="250" value="250"></div>
+  </div>
+  <div class="form-group" id="surroundsXOGroup">
+    <!-- Added id="lbl_surroundsXO" below -->
+    <div class="range-slider-group"><label id="lbl_surroundsXO">Surrounds Range</label><output>40 Hz - 250 Hz</output></div>
+    <div class="crossover-slider"><div class="track"></div><div class="track-infill"></div><input type="range" name="surroundsCrossoverMin" min="40" max="250" value="40"><input type="range" name="surroundsCrossoverMax" min="40" max="250" value="250"></div>
+  </div>
+  <div class="form-group" id="atmosXOGroup">
+    <!-- Added id="lbl_atmosXO" below -->
+    <div class="range-slider-group"><label id="lbl_atmosXO">Atmos / Height Range</label><output>40 Hz - 250 Hz</output></div>
+    <div class="crossover-slider"><div class="track"></div><div class="track-infill"></div><input type="range" name="atmosCrossoverMin" min="40" max="250" value="40"><input type="range" name="atmosCrossoverMax" min="40" max="250" value="250"></div>
+  </div>
+  <h2>Max EQ Frequency</h2>
+  <div class="form-group" id="frontsEqGroup">
+    <div class="range-slider-group">
+      <label for="frontsEqLimit">Fronts Cutoff</label>
+      <output for="frontsEqLimit">200 Hz</output>
+    </div>
+    <input type="range" id="frontsEqLimit" name="frontsEqLimit" min="150" max="500" step="5" value="200" class="single-slider">
+  </div>
+  <div class="form-group" id="centerEqGroup">
+    <div class="range-slider-group">
+      <label for="centerEqLimit">Center Cutoff</label>
+      <output for="centerEqLimit">250 Hz</output>
+    </div>
+    <input type="range" id="centerEqLimit" name="centerEqLimit" min="150" max="500" step="5" value="225" class="single-slider">
+  </div>
+  <div class="form-group" id="surroundsEqGroup">
+    <div class="range-slider-group">
+      <label for="surroundsEqLimit">Surrounds Cutoff</label>
+      <output for="surroundsEqLimit">250 Hz</output>
+    </div>
+    <input type="range" id="surroundsEqLimit" name="surroundsEqLimit" min="150" max="500" step="5" value="225" class="single-slider">
+  </div>
+  <div class="form-group" id="atmosEqGroup">
+    <div class="range-slider-group">
+      <label for="atmosEqLimit">Atmos / Height Cutoff</label>
+      <output for="atmosEqLimit">250 Hz</output>
+    </div>
+    <input type="range" id="atmosEqLimit" name="atmosEqLimit" min="150" max="500" step="5" value="225" class="single-slider">
+  </div>
+  </div>
+  <div class="column">
+  <h2>Bass Management</h2>
+  <div id="subwoofer-controls-container"></div>
+  <div class="form-group" id="doubleBassGroup">
+  <div class="label-with-toggle">
+  <label for="doubleBass"><span class="locked-badge">LOCKED</span>Double Bass / LFE+Main</label>
+  <label class="toggle-switch">
+  <input type="checkbox" id="doubleBass" name="doubleBass">
+  <span class="slider-round"></span>
+  </label>
+  </div>
+  </div>
+  <div id="bass-extraction-wrapper" class="form-group disabled">
+  <div class="range-slider-group">
+  <label for="bassExtractionFreq">Bass Extraction Cutoff</label>
+  <output for="bassExtractionFreq">120 Hz</output>
+  </div>
+  <input type="range" id="bassExtractionFreq" name="bassExtractionFreq" min="0" max="11" value="7" class="single-slider">
+  </div>
+  <div class="form-group" id="mimoGroup">
+  <div class="label-with-toggle">
+  <label for="enableMimo">Enable MIMO Processing</label>
+  <label class="toggle-switch">
+  <input type="checkbox" id="enableMimo" name="enableMimo">
+  <span class="slider-round"></span>
+  </label>
+  </div>
+  </div>
+  <div id="mimo-cutoff-wrapper" class="form-group disabled">
+  <div class="range-slider-group">
+  <label for="mimoCutoffFreq">MIMO Upper Limit</label>
+  <output for="mimoCutoffFreq">250 Hz</output>
+  </div>
+  <input type="range" id="mimoCutoffFreq" name="mimoCutoffFreq" class="single-slider">
+  </div>
+  <div class="form-group">
+  <label>Subwoofer Alignment Targets</label>
+  <div class="checkbox-group">
+  <label for="includeFrontMains">
+  <input type="checkbox" id="includeFrontMains" name="includeFrontMains" checked disabled>
+  Front
+  </label>
+  <label for="includeCenter">
+  <input type="checkbox" id="includeCenter" name="includeCenter">
+  Center
+  </label>
+  <label for="includeOtherFloor">
+  <input type="checkbox" id="includeOtherFloor" name="includeOtherFloor">
+  Surround
+  </label>
+  <label for="includeHeights">
+  <input type="checkbox" id="includeHeights" name="includeHeights">
+  Atmos
+  </label>
+  </div>
+  </div>
+  <div class="form-group">
+  <div class="label-with-toggle">
+  <label for="useIRStartAlignment">Sync All Impulse Start Times</label>
+  <label class="toggle-switch">
+  <input type="checkbox" id="useIRStartAlignment" name="useIRStartAlignment">
+  <span class="slider-round"></span>
+  </label>
+  </div>
+  </div>
+  <div class="form-group">
+  <div class="label-with-toggle">
+  <label for="avoidSubInversion">Keep Subs Default Polarity</label>
+  <label class="toggle-switch">
+  <input type="checkbox" id="avoidSubInversion" name="avoidSubInversion">
+  <span class="slider-round"></span>
+  </label>
+  </div>
+  </div>
+  <div class="form-group" id="subEqRangeGroup">
+    <div class="range-slider-group"><label id="lbl_subEqRange">Sub(s) Phase-Lock Zone</label><output>20 Hz - 250 Hz</output></div>
+    <div class="crossover-slider" id="subEqRangeSlider"><div class="track"></div><div class="track-infill"></div><input type="range" name="subEqRangeMin"><input type="range" name="subEqRangeMax"></div>
+  </div>
+  <div class="form-group">
+  <div class="range-slider-group">
+  <label for="lpfForLFE">LPF for LFE</label>
+  <output for="lpfForLFE">120 Hz</output>
+  </div>
+  <input type="range" id="lpfForLFE" name="lpfForLFE" class="single-slider">
+  </div>
+  <h2>Filter Boost Levels</h2>
+  <div class="form-group">
+  <div class="range-slider-group">
+  <label for="eqMaxGain">Subwoofer EQ Max Gain</label>
+  <output for="eqMaxGain">0 dB</output>
+  </div>
+  <input type="range" id="eqMaxGain" name="eqMaxGain" min="0" max="6" step="0.1" value="0" class="single-slider">
+  </div>
+  <div class="form-group">
+  <div class="range-slider-group">
+  <label for="frontsEqMaxGain">Fronts EQ Max Boost</label>
+  <output for="frontsEqMaxGain">0 dB</output>
+  </div>
+  <input type="range" id="frontsEqMaxGain" name="frontsEqMaxGain" min="0" max="6" step="0.1" value="0" class="single-slider">
+  </div>
+  <div class="form-group">
+  <div class="range-slider-group">
+  <label for="centerEqMaxGain">Center EQ Max Boost</label>
+  <output for="centerEqMaxGain">0 dB</output>
+  </div>
+  <input type="range" id="centerEqMaxGain" name="centerEqMaxGain" min="0" max="6" step="0.1" value="0" class="single-slider">
+  </div>
+  <div class="form-group">
+  <div class="range-slider-group">
+  <label for="surroundsEqMaxGain">Surround EQ Max Boost</label>
+  <output for="surroundsEqMaxGain">0 dB</output>
+  </div>
+  <input type="range" id="surroundsEqMaxGain" name="surroundsEqMaxGain" min="0" max="6" step="0.1" value="0" class="single-slider">
+  </div>
+  <div class="form-group">
+  <div class="range-slider-group">
+  <label for="atmosEqMaxGain">Atmos EQ Max Boost</label>
+  <output for="atmosEqMaxGain">0 dB</output>
+  </div>
+  <input type="range" id="atmosEqMaxGain" name="atmosEqMaxGain" min="0" max="6" step="0.1" value="0" class="single-slider">
+  </div>
+  <h2>Global Settings</h2>
+  <div class="form-group">
+    <div class="label-with-toggle">
+      <label for="thxMode">THX Cinema Mode</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="thxMode" name="thxMode">
+        <span class="slider-round"></span>
+      </label>
+    </div>
+    <div id="thxOptions" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+      <label for="thxAllpassMode" style="margin-bottom:5px;">Allpass Filter Application</label>
+      <select id="thxAllpassMode" name="thxAllpassMode">
+        <option value="both" selected>Add Allpass filters both ways (Default)</option>
+        <option value="sub">Add Allpass filter to Subwoofer Only</option>
+        <option value="speaker">Add Allpass filters to Speakers Only</option>
+      </select>
+    </div>
+  </div>
+  </div>
+  <div class="column">
+  <h2>Interactive</h2>
+  <div class="form-group">
+  <div class="label-with-toggle">
+  <label for="allowCustomVolume">Interactive Volume Levelling Mode</label>
+  <label class="toggle-switch">
+  <input type="checkbox" id="allowCustomVolume" name="allowCustomVolume">
+  <span class="slider-round"></span>
+  </label>
+  </div>
+  </div>
+  <div class="form-group">
+  <div class="label-with-toggle">
+  <label for="allowManualAlignment">Allow Manual Time Alignment</label>
+  <label class="toggle-switch">
+  <input type="checkbox" id="allowManualAlignment" name="allowManualAlignment">
+  <span class="slider-round"></span>
+  </label>
+  </div>
+  </div>
+  <div class="form-group">
+  <div class="label-with-toggle">
+  <label for="enableCustomFilters">Add Custom Filters</label>
+  <label class="toggle-switch">
+  <input type="checkbox" id="enableCustomFilters" name="enableCustomFilters">
+  <span class="slider-round"></span>
+  </label>
+  </div>
+  </div>
+  <h2>Low Volume Listening Compensation</h2>
+  <div class="form-group">
+  <div class="range-slider-group">
+  <label for="lowVolListeningOffset">Bass Boost</label>
+  <output for="lowVolListeningOffset">6 dB</output>
+  </div>
+  <input type="range" id="lowVolListeningOffset" name="lowVolListeningOffset" min="0" max="9" step="0.1" value="8.5" class="single-slider">
+  </div>
+  <div class="form-group">
+  <div class="range-slider-group">
+  <label for="lowVolListeningOffsetHi">Treble Boost</label>
+  <output for="lowVolListeningOffsetHi">6 dB</output>
+  </div>
+  <input type="range" id="lowVolListeningOffsetHi" name="lowVolListeningOffsetHi" min="0" max="6" step="0.1" value="2.4" class="single-slider">
+  </div>
+  <h2>Tactile Transducer</h2>
+  <div class="form-group">
+  <div class="label-with-toggle">
+  <label for="addBassShaker">Enable Bass Shaker Customization</label>
+  <label class="toggle-switch">
+  <input type="checkbox" id="addBassShaker" name="addBassShaker">
+  <span class="slider-round"></span>
+  </label>
+  </div>
+  </div>
+  <div id="bass-shaker-controls-wrapper" class="disabled">
+  <div class="form-group">
+  <label for="bassShakerCurve">Shaker Target Curve</label>
+  <select id="bassShakerCurve" name="bassShakerCurve"></select>
+  </div>
+  <div class="form-group" style="height: 120px; padding: 10px; background: #121212; border: 1px solid #37474f;">
+  <canvas id="bassShakerChart"></canvas>
+  </div>
+  <div class="form-group">
+  <div class="range-slider-group"><label for="bassShakerVolume">Gain Offset</label><output for="bassShakerVolume">0 dB</output></div>
+  <input type="range" id="bassShakerVolume" name="bassShakerVolume" min="-12" max="12" value="0" class="single-slider">
+  </div>
+  <div class="form-group">
+  <div class="label-with-toggle">
+  <label for="invertShakerPolarity">Invert TR Polarity</label>
+  <label class="toggle-switch">
+  <input type="checkbox" id="invertShakerPolarity" name="invertShakerPolarity">
+  <span class="slider-round"></span>
+  </label>
+  </div>
+  </div>
+  </div>
+  </div>
+  </div>
+  <div class="button-group">
+  <button type="button" class="save-btn" id="startOptimizationBtn">START OPTIMIZATION</button>
+  </div>
+  </form>
+</div>
+<script>
+var masterFreqList = [40, 60, 70, 80, 90, 100, 110, 120, 150, 180, 200, 250];
+var subEqFreqList = [6, 8, 10, 12, 15, 18, 20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100, 120, 150, 180, 200, 250, 300, 320];
+var avrConfig = null;
+var hasHardwareShaker = false;
+var isXT32 = true;
+var isXT = false;
+var isBasic = false;
+document.addEventListener('DOMContentLoaded', () => {
+    fetch('receiver_config.avr')
+    .then(response => {
+        if (!response.ok) throw new Error("Config not found");
+        return response.json();
+      })
+  .then(config => {
+      avrConfig = config;
+      if (avrConfig.enMultEQType !== undefined) {
+        if (avrConfig.enMultEQType != 2) {
+          isXT32 = false;
+          isXT = (avrConfig.enMultEQType == 1);
+          isBasic = !isXT;
+          console.log('Receiver model specific', 'MultEQ Type', isXT ? 'XT' : 'Basic', 'info');
+        } else {
+        console.log('Receiver model specific', 'MultEQ Type', 'XT32', 'info');
+      }
+  }
+if (avrConfig && avrConfig.hasBassShaker) {
+  hasHardwareShaker = true;
+}
+filterFrequenciesByModel();
+initUI();
+})
+.catch(err => {
+    console.error("Failed to load AVR config:", err);
+    initUI();
+  });
+
+function filterFrequenciesByModel() {
+  if (!avrConfig) return;
+  if (isXT) masterFreqList = masterFreqList.filter(f => f >= 80);
+  if (isBasic) masterFreqList = masterFreqList.filter(f => f >= 120);
+  if (!avrConfig.targetModelName) return;
+  const modelName = avrConfig.targetModelName.toUpperCase();
+  const modelNumber = modelName.replace(/\D/g, '');
+  const models180xo = ["720", "920", "1300", "2300", "3300", "1607", "5011", "6011", "6500", "730", "740", "930", "940",
+    "1400", "1500", "2400", "2500", "3400", "3500", "4300", "4400", "4500", "6300", "6400", "6500", "7703",
+    "7704", "7705", "1608", "1609", "5012", "5013", "6012", "6013", "7011", "7012", "7013", "8012"
+  ];
+  const models70xo = ["900", "70", "970", "2800", "2850", "670", "10", "20", "1", "3800", "4800", "30", "40", "50", "6800"];
+  const no180 = models180xo.includes(modelNumber);
+  const yes70 = models70xo.includes(modelNumber);
+  if (!yes70) masterFreqList = masterFreqList.filter(f => f !== 70);
+  if (no180) masterFreqList = masterFreqList.filter(f => f !== 180);
+}
+function filterFrequenciesByModel_old() {
+  if (!avrConfig || !avrConfig.targetModelName) return;
+  if (isXT) masterFreqList = masterFreqList.filter(f => f >= 80);
+  if (isBasic) masterFreqList = masterFreqList.filter(f => f >= 120);
+  const modelName = avrConfig.targetModelName.toUpperCase();
+  const modelNumber = modelName.replace(/\D/g, '');
+  const models180xo = ["720", "920", "1300", "2300", "3300", "1607", "5011", "6011", "6500", "730", "740", "930", "940",
+    "1400", "1500", "2400", "2500", "3400", "3500", "4300", "4400", "4500", "6300", "6400", "6500", "7703",
+    "7704", "7705", "1608", "1609", "5012", "5013", "6012", "6013", "7011", "7012", "7013", "8012"
+  ];
+const models70xo = ["900", "70", "970", "2800", "2850", "670", "10", "20", "1", "3800", "4800", "30", "40", "50", "6800"];
+const no180 = models180xo.includes(modelNumber);
+const yes70 = models70xo.includes(modelNumber);
+if (!yes70) masterFreqList = masterFreqList.filter(f => f !== 70);
+if (no180) masterFreqList = masterFreqList.filter(f => f !== 180);
+}
+function initUI() {
+  const params = new URLSearchParams(window.location.search);
+  const measurementFile = params.get('measurementFile');
+  const computedStyle = getComputedStyle(document.documentElement);
+  const primaryColor = computedStyle.getPropertyValue('--primary-color').trim();
+  let subEqRangeTouched = false;
+  function addTooltip(elementId, text) {
+    const targetEl = document.getElementById(elementId);
+    let attachEl = document.querySelector(`label[for="${elementId}"]`);
+    if (!attachEl && targetEl) {
+      attachEl = targetEl.closest('.label-with-toggle') || targetEl.closest('.range-slider-group') || targetEl.parentElement;
+    }
+  if (!attachEl) { attachEl = document.getElementById(elementId + '-label') || null; }
+  if (!attachEl) return;
+  if (attachEl.classList.contains('tooltip-container')) { const existing = attachEl.querySelector('.tooltip-text'); if (existing) existing.textContent = text; return; }
+  attachEl.classList.add('tooltip-container');
+  const tooltipBox = document.createElement('span');
+  tooltipBox.className = 'tooltip-text';
+  tooltipBox.textContent = text;
+  attachEl.appendChild(tooltipBox);
+}
+function initializeAllStaticControls() {
+  const enableMimoToggle = document.getElementById('enableMimo');
+  const doubleBassToggle = document.getElementById('doubleBass');
+  const doubleBassFormGroup = document.getElementById('doubleBassGroup') || doubleBassToggle.closest('.form-group');
+  const shakerToggle = document.getElementById('addBassShaker');
+  const shakerControls = document.getElementById('bass-shaker-controls-wrapper');
+  const bassExtractionWrapper = document.getElementById('bass-extraction-wrapper');
+  const mimoCutoffWrapper = document.getElementById('mimo-cutoff-wrapper');
+  const alignmentCheckboxes = document.querySelectorAll('.checkbox-group input[type="checkbox"]');
+  const eqMaxGainSlider = document.getElementById('eqMaxGain');
+  const eqMaxGainFrontSlider = document.getElementById("frontsEqMaxGainr");
+  const customFiltersToggle = document.getElementById('enableCustomFilters');
+  const thxToggle = document.getElementById('thxMode');
+  const thxOptions = document.getElementById('thxOptions');
+  const xoGroups = ['frontsXOGroup', 'centerXOGroup', 'surroundsXOGroup', 'atmosXOGroup'];
+  const lowVolBassGroup = document.getElementById('lowVolListeningOffset').closest('.form-group');
+  const lowVolTrebleGroup = document.getElementById('lowVolListeningOffsetHi').closest('.form-group');
+  if (!isXT32) {
+    enableMimoToggle.checked = false;
+    enableMimoToggle.disabled = true;
+    const mimoGroup = document.getElementById('mimoGroup');
+    if (mimoGroup) mimoGroup.classList.add('disabled');
+  }
+  if (isBasic) {
+      thxToggle.disabled = true;
+      thxToggle.parentElement.parentElement.parentElement.classList.add('disabled');
+  }
+  thxToggle.addEventListener('change', () => {
+      const isThx = thxToggle.checked;
+      if (thxOptions) {
+          thxOptions.style.display = isThx ? 'block' : 'none';
+      }
+      xoGroups.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.toggle('disabled', isThx);
+      });
+      if (isThx) {
+          enableMimoToggle.checked = false;
+          enableMimoToggle.disabled = true;
+          document.getElementById('mimoGroup').classList.add('disabled');
+          doubleBassToggle.checked = false;
+          doubleBassToggle.disabled = true;
+          if(doubleBassFormGroup) doubleBassFormGroup.classList.add('disabled');
+      } else {
+          if (isXT32) {
+              enableMimoToggle.disabled = false;
+              document.getElementById('mimoGroup').classList.remove('disabled');
+          }
+          updateDoubleBassState();
+      }
+  });
+  const setupLpfSlider = () => {
+    const slider = document.getElementById('lpfForLFE');
+    if(!slider) return;
+    const wrapper = slider.parentElement;
+    const output = wrapper.querySelector('output');
+    const lpfFreqs = masterFreqList.filter(f => f >= 80);
+    slider.min = 0;
+    slider.max = lpfFreqs.length - 1;
+    slider.step = 1;
+    const defaultIdx = lpfFreqs.indexOf(120) > -1 ? lpfFreqs.indexOf(120) : (lpfFreqs.length - 1);
+    slider.value = defaultIdx;
+    const update = () => {
+      const freq = lpfFreqs[parseInt(slider.value)];
+      output.textContent = `${freq} Hz`;
+      slider.dataset.freqValue = freq;
+    };
+  slider.addEventListener('input', update);
+  update();
+  };
+  setupLpfSlider();
+  if (hasHardwareShaker) {
+    shakerToggle.disabled = false;
+    shakerToggle.checked = true;
+    shakerControls.classList.remove('disabled');
+  } else {
+  shakerToggle.checked = false;
+  shakerToggle.disabled = true;
+  shakerControls.classList.add('disabled');
+  }
+  shakerToggle.addEventListener('change', () => {
+      if(hasHardwareShaker) {
+        shakerControls.classList.toggle('disabled', !shakerToggle.checked);
+      }
+  });
+  const updateLowVolumeState = () => {
+    const enabled = !customFiltersToggle.checked;
+    lowVolBassGroup.classList.toggle('disabled', !enabled);
+    lowVolTrebleGroup.classList.toggle('disabled', !enabled);
+  };
+  customFiltersToggle.addEventListener('change', updateLowVolumeState);
+  updateLowVolumeState();
+  const updateDoubleBassState = () => {
+    const isMimo = enableMimoToggle.checked;
+    if (isMimo) {
+      doubleBassToggle.checked = true;
+      doubleBassToggle.disabled = true;
+      if(doubleBassFormGroup) {
+        doubleBassFormGroup.classList.add('locked-active');
+        doubleBassFormGroup.classList.remove('disabled');
+      }
+    } else {
+      doubleBassToggle.disabled = false;
+      if(doubleBassFormGroup) {
+        doubleBassFormGroup.classList.remove('locked-active');
+        doubleBassFormGroup.classList.remove('disabled');
+      }
+    }
+    if (eqMaxGainSlider) {
+      const group = eqMaxGainSlider.closest('.form-group');
+      if (isMimo) {
+          eqMaxGainSlider.value = 5;
+          eqMaxGainSlider.dispatchEvent(new Event('input'));
+          eqMaxGainSlider.disabled = true;
+          if (group) group.classList.add('disabled');
+      } else {
+          eqMaxGainSlider.disabled = false;
+          if (group) group.classList.remove('disabled');
+      }
+    }
+    const eqMaxGainFrontSlider = document.getElementById('frontsEqMaxGain');
+    if (eqMaxGainFrontSlider) {
+      const group = eqMaxGainFrontSlider.closest('.form-group');
+      if (isMimo) {
+          eqMaxGainFrontSlider.disabled = true;
+          if (group) group.classList.add('disabled');
+      } else {
+          eqMaxGainFrontSlider.disabled = false;
+          if (group) group.classList.remove('disabled');
+      }
+    }
+    handleDoubleBassChange();
+  };
+  const manageAlignmentCheckboxes = (isDoubleBassEnabled) => {
+    alignmentCheckboxes.forEach(checkbox => {
+        if (checkbox.id === 'includeFrontMains') {
+          checkbox.checked = true;
+          checkbox.disabled = true;
+        } else {
+        checkbox.disabled = isDoubleBassEnabled;
+        if (isDoubleBassEnabled) { checkbox.checked = false; }
+      }
+  });
+  };
+  const handleDoubleBassChange = () => {
+    const isDoubleBassEnabled = doubleBassToggle.checked;
+    const isMimo = enableMimoToggle.checked;
+    bassExtractionWrapper.classList.toggle('disabled', !isDoubleBassEnabled || isMimo);
+    manageAlignmentCheckboxes(isDoubleBassEnabled);
+    const frontsSliderGroup = document.querySelector('input[name="frontsCrossoverMin"]').closest('.form-group');
+    if (frontsSliderGroup) {
+      frontsSliderGroup.classList.toggle('disabled', isDoubleBassEnabled);
+    }
+    if (isDoubleBassEnabled) {
+        if (isMimo) {
+            linkSliders('mimoCutoffFreq', 'bassExtractionFreq', 'bass-extraction-wrapper');
+        } else {
+            linkSliders('bassExtractionFreq', 'mimoCutoffFreq', 'mimo-cutoff-wrapper');
+        }
+    }
+    const irToggle = document.getElementById('useIRStartAlignment');
+    if (irToggle) {
+      if (isDoubleBassEnabled && !irToggle.checked) {
+        irToggle.checked = true;
+        irToggle.dispatchEvent(new Event('change'));
+      } else if (!isDoubleBassEnabled && irToggle.checked) {
+        irToggle.checked = false;
+        irToggle.dispatchEvent(new Event('change'));
+      }
+    }
+  };
+  enableMimoToggle.addEventListener('change', () => {
+      mimoCutoffWrapper.classList.toggle('disabled', !enableMimoToggle.checked);
+      updateDoubleBassState();
+  });
+  doubleBassToggle.addEventListener('change', handleDoubleBassChange);
+  const irStartToggle = document.getElementById('useIRStartAlignment');
+  const subEqRangeGroup = document.getElementById('subEqRangeGroup');
+  const alignmentTargetsGroup = alignmentCheckboxes[0] && alignmentCheckboxes[0].closest('.form-group');
+  let savedAlignmentState = {};
+  irStartToggle.addEventListener('change', () => {
+    if (irStartToggle.checked) {
+      alignmentCheckboxes.forEach(cb => {
+        savedAlignmentState[cb.id] = { checked: cb.checked, disabled: cb.disabled };
+        cb.checked = false;
+        cb.disabled = true;
+      });
+      if (alignmentTargetsGroup) alignmentTargetsGroup.classList.add('disabled');
+      if (subEqRangeGroup) subEqRangeGroup.classList.add('disabled');
+      subEqRangeGroup.querySelectorAll('input[type="range"]').forEach(s => s.disabled = true);
+    } else {
+      alignmentCheckboxes.forEach(cb => {
+        const saved = savedAlignmentState[cb.id];
+        if (saved) { cb.checked = saved.checked; cb.disabled = saved.disabled; }
+      });
+      if (alignmentTargetsGroup) alignmentTargetsGroup.classList.remove('disabled');
+      if (subEqRangeGroup) subEqRangeGroup.classList.remove('disabled');
+      subEqRangeGroup.querySelectorAll('input[type="range"]').forEach(s => s.disabled = false);
+      manageAlignmentCheckboxes(doubleBassToggle.checked);
+    }
+  });
+  document.querySelectorAll('input[type="range"].single-slider').forEach(slider => {
+      if (['bassExtractionFreq', 'mimoCutoffFreq', 'lpfForLFE'].includes(slider.id)) return;
+      const output = slider.parentElement.querySelector('output') || slider.closest('.form-group').querySelector('output');
+      if (!output) return;
+      let unit = 'dB';
+      if (slider.name.toLowerCase().includes('delay')) unit = 'ms';
+      const updateOutput = () => { output.textContent = `${slider.value} ${unit}`; };
+      slider.addEventListener('input', updateOutput);
+      updateOutput();
+    });
+  const setupFreqSlider = (sliderId, wrapperId) => {
+    const slider = document.getElementById(sliderId);
+    const wrapper = document.getElementById(wrapperId);
+    if(!slider || !wrapper) return;
+    const output = wrapper.querySelector('output');
+    slider.min = 0;
+    slider.max = masterFreqList.length - 1;
+    slider.step = 1;
+    const defaultFreq = sliderId === 'bassExtractionFreq' ? 120 : 200;
+    let defaultIdx = 0;
+    if(masterFreqList.includes(defaultFreq)) {
+      defaultIdx = masterFreqList.indexOf(defaultFreq);
+    } else {
+    defaultIdx = masterFreqList.length - 1;
+  }
+  slider.value = defaultIdx;
+  const update = () => {
+    const freq = masterFreqList[parseInt(slider.value)];
+    output.textContent = `${freq} Hz`;
+    slider.dataset.freqValue = freq;
+  };
+  slider.addEventListener('input', update);
+  update();
+  };
+  setupFreqSlider('bassExtractionFreq', 'bass-extraction-wrapper');
+  setupFreqSlider('mimoCutoffFreq', 'mimo-cutoff-wrapper');
+  ['frontsEqLimit', 'centerEqLimit', 'surroundsEqLimit', 'atmosEqLimit'].forEach(id => {
+      const slider = document.getElementById(id);
+      if (!slider) return;
+      const updateEqOutput = () => {
+          const output = slider.previousElementSibling.querySelector('output');
+          output.textContent = `${slider.value} Hz`;
+      };
+      slider.addEventListener('input', updateEqOutput);
+      updateEqOutput();
+  });
+  const linkSliders = (sourceId, targetId, targetWrapperId) => {
+    const source = document.getElementById(sourceId);
+    const target = document.getElementById(targetId);
+    const targetOutput = document.getElementById(targetWrapperId).querySelector('output');
+    const sourceOutput = source.parentElement.querySelector('output') || source.closest('.form-group').querySelector('output');
+    
+    if (source && target && targetOutput && sourceOutput) {
+      target.value = source.value;
+      target.dataset.freqValue = source.dataset.freqValue;
+      targetOutput.textContent = sourceOutput.textContent;
+    }
+  };
+  enableMimoToggle.addEventListener('change', () => {
+      mimoCutoffWrapper.classList.toggle('disabled', !enableMimoToggle.checked);
+      updateDoubleBassState();
+      if (enableMimoToggle.checked) {
+          linkSliders('mimoCutoffFreq', 'bassExtractionFreq', 'bass-extraction-wrapper');
+      }
+  });
+  document.getElementById('mimoCutoffFreq').addEventListener('input', () => {
+    linkSliders('mimoCutoffFreq', 'bassExtractionFreq', 'bass-extraction-wrapper');
+  });
+  document.getElementById('bassExtractionFreq').addEventListener('input', () => {
+    linkSliders('bassExtractionFreq', 'mimoCutoffFreq', 'mimo-cutoff-wrapper');
+  });
+  document.querySelectorAll('.crossover-slider').forEach(container => {
+      const rangeMin = container.querySelector('input[name$="CrossoverMin"]');
+      const rangeMax = container.querySelector('input[name$="CrossoverMax"]');
+      const output = container.parentElement.querySelector('output');
+      const infill = container.querySelector('.track-infill');
+      if (!rangeMin || !rangeMax || !output || !infill) return;
+      rangeMin.min = 0; rangeMin.max = masterFreqList.length - 1; rangeMin.step = 1;
+      rangeMax.min = 0; rangeMax.max = masterFreqList.length - 1; rangeMax.step = 1;
+      const firstAvailable = masterFreqList[0];
+      const lastAvailable = masterFreqList[masterFreqList.length -1];
+      let startFreq = 40;
+      let endFreq = 250;
+      if (startFreq < firstAvailable) startFreq = firstAvailable;
+      if (endFreq > lastAvailable) endFreq = lastAvailable; 
+      const findIdx = (f) => {
+        let idx = masterFreqList.indexOf(f);
+        return idx === -1 ? (masterFreqList.length - 1) : idx;
+      };
+    rangeMin.value = findIdx(startFreq);
+    rangeMax.value = findIdx(endFreq);
+    const updateCrossover = () => {
+      let minIndex = parseInt(rangeMin.value);
+      let maxIndex = parseInt(rangeMax.value);
+      if (minIndex > maxIndex) {
+        const temp = minIndex; minIndex = maxIndex; maxIndex = temp;
+      }
+    const minFreq = masterFreqList[minIndex];
+    const maxFreq = masterFreqList[maxIndex];
+    const totalSteps = masterFreqList.length - 1;
+    const minPercent = (minIndex / totalSteps) * 100;
+    const maxPercent = (maxIndex / totalSteps) * 100;
+    infill.style.left = `${minPercent}%`;
+    infill.style.width = `${maxPercent - minPercent}%`;
+    output.textContent = `${minFreq} Hz - ${maxFreq} Hz`;
+    rangeMin.dataset.freqValue = minFreq;
+    rangeMax.dataset.freqValue = maxFreq;
+  };
+  rangeMin.addEventListener('input', updateCrossover);
+  rangeMax.addEventListener('input', updateCrossover);
+  updateCrossover();
+  });
+  const subEqContainer = document.getElementById('subEqRangeSlider');
+  if (subEqContainer) {
+    const seMin = subEqContainer.querySelector('input[name="subEqRangeMin"]');
+    const seMax = subEqContainer.querySelector('input[name="subEqRangeMax"]');
+    const seOutput = subEqContainer.parentElement.querySelector('output');
+    const seInfill = subEqContainer.querySelector('.track-infill');
+    if (seMin && seMax && seOutput && seInfill) {
+      const last = subEqFreqList.length - 1;
+      const defaultLo = subEqFreqList.indexOf(20);
+      const defaultHi = subEqFreqList.indexOf(250);
+      seMin.min = 0; seMin.max = last; seMin.step = 1; seMin.value = defaultLo;
+      seMax.min = 0; seMax.max = last; seMax.step = 1; seMax.value = defaultHi;
+      const updateSubEqRange = () => {
+        const lo = parseInt(seMin.value);
+        const hi = parseInt(seMax.value);
+        const loFreq = subEqFreqList[lo];
+        const hiFreq = subEqFreqList[hi];
+        const loP = (lo / last) * 100;
+        const hiP = (hi / last) * 100;
+        seInfill.style.left = `${loP}%`;
+        seInfill.style.width = `${hiP - loP}%`;
+        seOutput.textContent = `${loFreq} Hz - ${hiFreq} Hz`;
+        seMin.dataset.freqValue = loFreq;
+        seMax.dataset.freqValue = hiFreq;
+      };
+      const minGap = 5;
+      seMin.addEventListener('input', () => {
+        subEqRangeTouched = true;
+        if (parseInt(seMin.value) > parseInt(seMax.value) - minGap) seMin.value = parseInt(seMax.value) - minGap;
+        updateSubEqRange();
+      });
+      seMax.addEventListener('input', () => {
+        subEqRangeTouched = true;
+        if (parseInt(seMax.value) < parseInt(seMin.value) + minGap) seMax.value = parseInt(seMin.value) + minGap;
+        updateSubEqRange();
+      });
+      updateSubEqRange();
+    }
+  }
+  if (enableMimoToggle.checked) updateDoubleBassState();
+  else handleDoubleBassChange();
+}
+function initializeTooltips() {
+  addTooltip("enableMimo", "Uses only the front speakers (will be set to full range) and available subwoofer(s). No other speakers are included in MIMO processing. MIMO channel filters cannot be customized.");
+  addTooltip("targetCurve", "Selects the target EQ curve that the optimizer will attempt to match across all speakers and subs.");
+  addTooltip("doubleBass", "Sets front speakers to full range and doubles their bass content in the sub(s) - aka 'LFE + Main' mode");
+  addTooltip("avoidSubInversion", "Prevents the optimizer from evaluating/inverting subwoofer polarity.");
+  addTooltip("lowVolListeningOffset", "Controls how much bass compensation is applied to maintain equal loudness at lower listening levels.");
+  addTooltip("lowVolListeningOffsetHi", "Controls how much high frequency compensation is applied to maintain equal loudness at lower listening levels. W A R N I N G: Excessive boosting of HF filters may DAMAGE YOUR TWEETERS at higher volumes!");
+  addTooltip("addBassShaker", "Enables custom settings for tactile transducer (bass shaker).");
+  addTooltip("bassShakerVolume", "Adjusts the output level of the bass shaker relative to the main subwoofer signal.");
+  addTooltip("startOptimizationBtn", "Starts the optimization process using all the custom settings on this screen.");
+  addTooltip("allowCustomVolume", "Pauses the script after initial processing, allowing for dynamic adjustment of subwoofer and target curve levels before the final optimization step.");
+  addTooltip("bassExtractionFreq", "Front speakers will play ALL frequencies, subwoofer(s) will contribute up to that frequency.");
+  addTooltip("mimoCutoffFreq", "Defines the upper frequency limit for MIMO optimization.");
+  addTooltip("eqMaxGain", "Defines how many decibels of filter boost is allowed to track the target curve response for the subwoofer(s).");
+  addTooltip("enableCustomFilters", "Adds a pause step to add a combination of custom filters to any channel in REW. Option will remove 'low volume' filters from Reference mode.");
+  addTooltip("invertShakerPolarity", "Inverts the electrical phase of the bass shaker signal.");
+  addTooltip("lpfForLFE", "Low Pass Filter frequency for the 'Low Frequency Effects' channel. Content above this frequency in the LFE track will be attenuated. Dolby caps content of this channel to 120Hz.");
+  addTooltip("allowManualAlignment", "An advanced feature that pauses the optimization after automated speaker time alignment. Potentially useful for checking and fixing Up-Firing Atmos speakers allowing manual alignment of the 'reflected' ceiling bounce peak instead of the direct sound.");
+  addTooltip("includeCenter", "Includes Center speaker response in phase/time alignment of subwoofer(s).");
+  addTooltip("includeFrontMains", "Front Mains will always be included in phase/time alignment of subwoofer(s).");
+  addTooltip("includeHeights", "Includes ALL Atmos speakers (including FWL/FWR) in phase/time alignment of subwoofer(s).");
+  addTooltip("includeOtherFloor", "Includes SLA/SRA/SBL/SBR/SB responses in phase/time alignment of subwoofer(s).");
+  addTooltip("frontsEqLimit", "Sets the upper frequency limit for EQ correction on this channel group. When MIMO is enabled, will work between MIMO cutoff frequency and max frequency");
+  addTooltip("centerEqLimit", "Sets the upper frequency limit for EQ correction on this channel.");
+  addTooltip("surroundsEqLimit", "Sets the upper frequency limit for EQ correction on this channel group.");
+  addTooltip("atmosEqLimit", "Sets the upper frequency limit for EQ correction on this channel group.");
+  addTooltip("frontsEqMaxGain", "Sets the maximum allowed filter boost to reach the target curve for this channel group.");
+  addTooltip("centerEqMaxGain", "SSets the maximum allowed filter boost to reach the target curve for this channel.");
+  addTooltip("surroundsEqMaxGain", "Sets the maximum allowed filter boost to reach the target curve for this channel group.");
+  addTooltip("atmosEqMaxGain", "Sets the maximum allowed filter boost to reach the target curve for this channel group.");
+  addTooltip("lbl_frontsXO", "Defines the specific frequency window within which the optimizer will search for the ideal Fronts crossover point (minimum speaker filters possible for lower tier models: XT => 93Hz, Basic => 375Hz).");
+  addTooltip("lbl_centerXO", "Defines the specific frequency window within which the optimizer will search for the ideal Center crossover point (minimum speaker filters possible for lower tier models: XT => 93Hz, Basic => 375Hz).");
+  addTooltip("lbl_surroundsXO", "Defines the specific frequency window within which the optimizer will search for the ideal Surround crossover points (minimum speaker filters possible for lower tier models: XT => 93Hz, Basic => 375Hz).");
+  addTooltip("lbl_atmosXO", "Defines the specific frequency window within which the optimizer will search for the ideal Atmos/Height crossover points (minimum speaker filters possible for lower tier models: XT => 93Hz, Basic => 375Hz).");
+  addTooltip("thxMode", "Sets all speaker crossovers to 80Hz (THX Standard) and adds allpass filters at crossovers. For XT models crossover/allpass frequencies will be set to 100Hz");
+  addTooltip("thxAllpassMode", "Determines where the Phase Matching Allpass filters are applied when in THX Mode.");
+  addTooltip("lbl_subEqRange", "Frequency range for phase-aligning subwoofer(s) with speakers and with each other (multi-sub). Left at default, the optimizer auto-calculates separate optimal ranges for sub-to-speaker and sub-to-sub alignment based on measured subwoofer response. Adjusting this slider overrides both ranges with your selection. Can significantly alter sub distance(s).");
+  addTooltip("useIRStartAlignment", "Useful when SPL-based sub alignment produces an audible timing gap between speakers and subwoofer(s). Forces all impulse responses to start at the same time, ensuring tight transient alignment across the entire system.");
+}
+function parseCurveData(textData) { const points = []; const lines = textData.split('\n'); for (const line of lines) { if (line.trim().startsWith('*') || line.trim() === '') continue; const parts = line.trim().split(/\s+/); if (parts.length >= 2) { const freq = parseFloat(parts[0]), db = parseFloat(parts[1]); if (!isNaN(freq) && !isNaN(db)) points.push({ x: freq, y: db }); } } return points;}
+const targetCurveCtx = document.getElementById('curveChart').getContext('2d'); const targetCurveSelect = document.getElementById('targetCurve'); let curveChart;
+async function updateMainChart(curveFilename) {
+  if (!curveFilename) return; try { const response = await fetch(`/api/get-curve-data?file=${encodeURIComponent(curveFilename)}`); if (!response.ok) throw new Error('Failed to load curve data'); const textData = await response.text(); const chartData = parseCurveData(textData); if (curveChart) curveChart.destroy(); curveChart = new Chart(targetCurveCtx, { type: 'line', data: { datasets: [{ label: 'Target', data: chartData, borderColor: primaryColor, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true, backgroundColor: (context) => { const {ctx, chartArea} = context.chart; if (!chartArea) return null; const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top); gradient.addColorStop(0, 'rgba(255, 179, 0, 0)'); gradient.addColorStop(1, 'rgba(255, 179, 0, 0.35)'); return gradient; } }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { type: 'logarithmic', title: { display: false }, ticks: { color: '#90a4ae' }, grid: { color: '#37474f' }, min: 10, max: 24000 }, y: { title: { display: false }, ticks: { color: '#90a4ae', callback: (v) => v + ' dB' }, grid: { color: '#37474f' }, min: -6, max: 10 } } } }); } catch (error) { console.error("Main chart update failed:", error); }}
+const shakerCtx = document.getElementById('bassShakerChart').getContext('2d'); const shakerCurveSelect = document.getElementById('bassShakerCurve'); let shakerChart;
+async function updateShakerChart(curveFilename) {
+  if (!curveFilename) return; try { const response = await fetch(`/api/get-tr-curve-data?file=${encodeURIComponent(curveFilename)}`); if (!response.ok) throw new Error('Failed'); const textData = await response.text(); const chartData = parseCurveData(textData); if (shakerChart) shakerChart.destroy(); shakerChart = new Chart(shakerCtx, { type: 'line', data: { datasets: [{ label: 'Shaker', data: chartData, borderColor: '#ff5252', borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true, backgroundColor: 'rgba(255, 82, 82, 0.25)' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { type: 'logarithmic', title: { display: false }, ticks: { color: '#90a4ae', font: { size: 9 } }, grid: { color: '#37474f' }, min: 10, max: 250 }, y: { title: { display: false }, ticks: { color: '#90a4ae', font: { size: 9 } }, grid: { color: '#37474f' }, min: -5, max: 12 } } } }); } catch (error) { console.error("Shaker chart update failed:", error); }}
+async function initializeDropdowns() {
+  try { const response = await fetch('/api/get-target-curves'); const data = await response.json(); if (data.success && data.curves) { let defaultCurve = data.curves[0]; data.curves.forEach(curve => { const option = document.createElement('option'); option.value = curve; option.textContent = curve.replace('.txt', ''); if (curve.toLowerCase().includes('acoustix')) { option.selected = true; defaultCurve = curve; } targetCurveSelect.appendChild(option); }); targetCurveSelect.addEventListener('change', (event) => updateMainChart(event.target.value)); await updateMainChart(defaultCurve); } } catch (error) { console.error("Failed to init main dropdown:", error); } try { const response = await fetch('/api/get-tr-curves'); const data = await response.json(); if (data.success && data.curves) { let defaultCurve = data.curves[0]; data.curves.forEach(curve => { const option = document.createElement('option'); option.value = curve; option.textContent = curve.replace('.txt', ''); shakerCurveSelect.appendChild(option); }); shakerCurveSelect.addEventListener('change', (event) => updateShakerChart(event.target.value)); await updateShakerChart(defaultCurve); } } catch (error) { console.error("Failed to init shaker dropdown:", error); }}
+initializeAllStaticControls();
+initializeTooltips();
+initializeDropdowns();
+document.getElementById('startOptimizationBtn').addEventListener('click', () => {
+    const form = document.getElementById('settings-form');
+    const urlParams = new URLSearchParams();
+    ['targetCurve', 'bassShakerCurve', 'masterSubVolume', 'bassExtractionFreq',
+      'mimoCutoffFreq', 'eqMaxGain', 'frontsEqMaxGain', 'centerEqMaxGain',
+      'surroundsEqMaxGain', 'atmosEqMaxGain', 'lowVolListeningOffset',
+      'lowVolListeningOffsetHi', 'bassShakerVolume', 'lpfForLFE',
+      'thxAllpassMode']
+    .forEach(name => {
+        const element = form.elements[name];
+        if (element) {
+          if (element.dataset.freqValue) urlParams.append(name, element.dataset.freqValue);
+          else urlParams.append(name, element.value);
+        }
+    });
+['allowCustomVolume', 'doubleBass', 'enableMimo', 'avoidSubInversion',
+  'enableCustomFilters', 'addBassShaker', 'includeFrontMains',
+  'includeCenter', 'includeOtherFloor', 'includeHeights',
+  'invertShakerPolarity', 'allowManualAlignment', 'thxMode',
+  'useIRStartAlignment']
+.forEach(name => {
+    const element = form.elements[name];
+    if (element) urlParams.append(name, element.checked);
+  });
+['fronts', 'center', 'surrounds', 'atmos'].forEach(prefix => {
+    const minElement = form.elements[`${prefix}CrossoverMin`];
+    const maxElement = form.elements[`${prefix}CrossoverMax`];
+    if (minElement && maxElement) {
+      urlParams.append(minElement.name, minElement.dataset.freqValue);
+      urlParams.append(maxElement.name, maxElement.dataset.freqValue);
+    }
+});
+if (subEqRangeTouched) {
+  const seMinEl = form.elements['subEqRangeMin'];
+  const seMaxEl = form.elements['subEqRangeMax'];
+  if (seMinEl && seMaxEl) {
+      urlParams.append('subEqRangeMin', seMinEl.dataset.freqValue);
+      urlParams.append('subEqRangeMax', seMaxEl.dataset.freqValue);
+  }
+}
+['frontsEqLimit', 'centerEqLimit', 'surroundsEqLimit', 'atmosEqLimit'].forEach(name => {
+    const element = document.getElementById(name);
+    if (element) {
+        urlParams.append(name, element.value);
+    }
+});
+if (measurementFile) urlParams.set('measurementFile', measurementFile);
+const optimizerUrl = `A1EvoAcoustiX.html?${urlParams.toString()}`;
+window.open(optimizerUrl);
+});
+}
+});
+{const canvas = document.createElement('canvas');
+  canvas.width = 32; canvas.height = 32;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 32, 32);
+  gradient.addColorStop(0, '#212121');
+  gradient.addColorStop(1, '#000000');
+  ctx.strokeStyle = '#ffd700';
+  ctx.fillStyle = '#ffd700';
+  ctx.lineWidth = 2;
+  ctx.fillRect(0, 0, 32, 32);
+  ctx.strokeRect(0, 0, 32, 32);
+  gradient.addColorStop(0, '#212121');
+  gradient.addColorStop(1, '#000000');
+  ctx.strokeStyle = '#ffd700';
+  ctx.fillStyle = '#ffd700';
+  ctx.lineWidth = 2.5;
+  ctx.font = 'bold 20px Arial';
+  ctx.fillStyle = '#ffb300';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('A1', 16, 17);
+  const faviconUrl = canvas.toDataURL('image/png');
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  link.href = faviconUrl;
+  document.head.appendChild(link);}
+</script>
+</body>
+</html>

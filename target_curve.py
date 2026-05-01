@@ -46,19 +46,20 @@ MAIN_CHANNEL_IDS = frozenset({"fl", "c", "fr"})
 # All positions measured (0 = MLP primary, 1-7 = adjacent/reference positions)
 ALL_POSITIONS = [str(i) for i in range(8)]
 
-# Frequency grid: 1/12-octave steps from 10 Hz to 20 kHz
-# 1/12 octave ≈ 0.0833 decades/step; 10 Hz → 20kHz is 3.3 decades ≈ 40 steps
-# 42 points is sufficient for house curve while keeping the data lean.
-_OCTAVE_STEP = 1.0 / 12.0  # 1/12 octave
+# Frequency grid: 1/24-octave steps from 3 Hz to 20 kHz.
+# Matches REW standard resolution (~186 points across the full range).
+# 1/24 octave ≈ 0.0417 decades/step; 3 Hz → 20kHz is 3.82 decades ≈ 92 steps.
+_OCTAVE_STEP = 1.0 / 24.0  # 1/24 octave
 
 
 def _make_target_frequencies() -> np.ndarray:
-    """Generate 1/6-octave frequency grid from 10 Hz to 20 kHz.
-    
-    Extended below 20 Hz to cover deep bass subwoofer extension.
-    10 Hz start captures full subwoofer range.
+    """Generate 1/24-octave frequency grid from 3 Hz to 20 kHz.
+
+    Matches REW's standard display smoothing (1/3 octave) with enough
+    grid resolution for smooth curve rendering at all frequencies.
+    3 Hz start captures full subwoofer range.
     """
-    log_min = np.log10(10.0)   # start at 10 Hz for subwoofer coverage
+    log_min = np.log10(3.0)    # start at 3 Hz for full subwoofer coverage
     log_max = np.log10(20000.0)
     n_steps = int(round((log_max - log_min) / _OCTAVE_STEP)) + 2
     log_freqs = np.linspace(log_min, log_max, n_steps)
@@ -82,9 +83,9 @@ class TargetCurveParams:
     - Smooth transitions throughout to avoid introducing new resonances
     """
 
-    bass_shelf_gain: float = 5.0
+    bass_shelf_gain: float = 7.0
     """dB of bass lift at the lowest frequency (10 Hz), rolling off to 0 dB at bass_shelf_start.
-    Typical range: +4 to +7 dB. Based on Harman curve research."""
+    Reference curve uses ~7 dB to match house curve target: +6.9 dB at 3-20 Hz, rolls to +5.3 dB at 80 Hz."""
 
     bass_shelf_start: float = 80.0
     """Hz — frequency above which the bass shelf no longer applies.
@@ -94,10 +95,10 @@ class TargetCurveParams:
     """Hz — frequency above which high-frequency tilt begins.
     Below this, response is neutral/flat. Starting at 2 kHz gives natural treble balance."""
 
-    tilt_rate: float = 1.5
+    tilt_rate: float = 3.5
     """dB/decade — high-frequency downward tilt rate.
-    1.5 dB/decade is a gentle slope (more reflective room simulation).
-    Dirac uses similar tilt rates for living room acoustics."""
+    Reference curve slope from 2 kHz to 20 kHz is ~2.7 to 3.1 dB/decade.
+    3.5 dB/decade approximates the observed house curve shape."""
 
     mlp_weight: float = 2.0
     """Weight for MLP position (0) in the weighted average. Positions 1-7 get weight 1."""
