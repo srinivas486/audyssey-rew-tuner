@@ -155,7 +155,7 @@ def main() -> None:
 
         sw_targets = generate_all_subwoofer_targets(channel_responses, params)
         sp_targets = generate_all_speaker_targets(channel_responses, params)
-                freqs, house_spl = generate_merged_target(sp_targets, sw_targets)
+        freqs, house_spl = generate_merged_target(sp_targets, sw_targets)
 
         if len(freqs) == 0:
             sys.stderr.write("No speaker or subwoofer channels found.\n")
