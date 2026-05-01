@@ -422,6 +422,78 @@ class TestGenerateMergedTarget:
 # Tests: export + push merged target
 # -----------------------------------------------------------------------------
 
+
+
+class TestGenerateMergedTargetWithSubwoofer:
+    """Task 2.4 — Merged target with subwoofer crossover blend."""
+
+    @pytest.fixture
+    def synthetic_sw_targets(self):
+        """SW1 and SW2 targets: distinct levels to verify averaging."""
+        sw_freq = TARGET_FREQUENCIES
+        sw1_db = np.full_like(sw_freq, 15.0)   # SW1: flat at 15 dB
+        sw2_db = np.full_like(sw_freq, 14.0)   # SW2: flat at 14 dB (avg = 14.5 dB)
+        return {"sw1": (sw_freq, sw1_db), "sw2": (sw_freq, sw2_db)}
+
+    @pytest.fixture
+    def synthetic_lcr_targets(self):
+        """FL+C+FR targets: flat at 0 dB (neutral)."""
+        lcr_freq = TARGET_FREQUENCIES
+        fl_db = np.full_like(lcr_freq, 0.0)
+        c_db = np.full_like(lcr_freq, 0.0)
+        fr_db = np.full_like(lcr_freq, 0.0)
+        return {"fl": (lcr_freq, fl_db), "c": (lcr_freq, c_db), "fr": (lcr_freq, fr_db)}
+
+    def test_below_crossover_uses_subwoofer_avg(self, synthetic_lcr_targets, synthetic_sw_targets):
+        """At 3 Hz (well below any smoothing bleed), merged is pure subwoofer average."""
+        merged_freq, merged_db = generate_merged_target(synthetic_lcr_targets, synthetic_sw_targets)
+
+        # Index 0 = 3 Hz, guaranteed pure SW (first point on grid, no smoothing bleed)
+        idx_3hz = 0
+        sw_avg = (synthetic_sw_targets["sw1"][1] + synthetic_sw_targets["sw2"][1]) / 2.0
+        assert abs(merged_db[idx_3hz] - sw_avg[idx_3hz]) < 0.1
+
+    def test_above_crossover_uses_lcr(self, synthetic_lcr_targets, synthetic_sw_targets):
+        """At 200 Hz (well above crossover), merged equals LCR mean (0 dB)."""
+        merged_freq, merged_db = generate_merged_target(synthetic_lcr_targets, synthetic_sw_targets)
+        idx_200 = np.argmin(np.abs(merged_freq - 200.0))
+        np.testing.assert_allclose(merged_db[idx_200], 0.0, atol=0.5)
+
+    def test_blend_region_transitions_smoothly(self, synthetic_lcr_targets, synthetic_sw_targets):
+        """In the 57-113 Hz crossover region, curve transitions smoothly from SW to LCR."""
+        merged_freq, merged_db = generate_merged_target(synthetic_lcr_targets, synthetic_sw_targets)
+
+        # In the crossover region, SPL should be between SW avg (14.5 dB) and LCR (0 dB)
+        in_blend = (merged_freq >= 57.0) & (merged_freq <= 113.0)
+        blend_values = merged_db[in_blend]
+        assert np.all(blend_values > 0.0), "Blend region should be above 0 dB"
+        assert np.all(blend_values < 14.5), "Blend region should be below 14.5 dB"
+
+    def test_final_output_is_smoothed(self, synthetic_lcr_targets, synthetic_sw_targets):
+        """Output is 1/3-octave smoothed (no sharp spikes)."""
+        merged_freq, merged_db = generate_merged_target(synthetic_lcr_targets, synthetic_sw_targets)
+        diffs = np.abs(np.diff(merged_db))
+        assert np.mean(diffs) < 3.0, "Output should be smoothed"
+
+    def test_no_subwoofer_returns_lcr_only(self, synthetic_lcr_targets):
+        """With subwoofer_targets=None, returns LCR merged (backwards compatible)."""
+        merged_freq, merged_db = generate_merged_target(synthetic_lcr_targets, subwoofer_targets=None)
+        np.testing.assert_array_equal(merged_freq, TARGET_FREQUENCIES)
+        np.testing.assert_allclose(merged_db, 0.0, atol=0.5)
+
+    def test_single_subwoofer_uses_that_one(self, synthetic_lcr_targets):
+        """With only SW1, uses SW1 directly (no averaging with non-existent SW2)."""
+        sw_freq = TARGET_FREQUENCIES
+        sw1_db = np.full_like(sw_freq, 10.0)
+        sw_targets = {"sw1": (sw_freq, sw1_db)}
+
+        merged_freq, merged_db = generate_merged_target(synthetic_lcr_targets, sw_targets)
+
+        # At 3 Hz (index 0), raw SW value should be used (before smoothing)
+        idx_3hz = 0
+        np.testing.assert_allclose(merged_db[idx_3hz], 10.0, atol=0.1)
+
+
 class TestExportMergedTarget:
     """Task 2.5 — FRD export for merged target."""
 
