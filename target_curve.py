@@ -53,14 +53,14 @@ _OCTAVE_STEP = 1.0 / 24.0  # 1/24 octave
 
 
 def _make_target_frequencies() -> np.ndarray:
-    """Generate 1/24-octave frequency grid from 3 Hz to 20 kHz.
+    """Generate 1/24-octave frequency grid from 3 Hz to 25 kHz.
 
     Matches REW's standard display smoothing (1/3 octave) with enough
     grid resolution for smooth curve rendering at all frequencies.
     3 Hz start captures full subwoofer range.
     """
     log_min = np.log10(3.0)    # start at 3 Hz for full subwoofer coverage
-    log_max = np.log10(20000.0)
+    log_max = np.log10(25000.0)
     n_steps = int(round((log_max - log_min) / _OCTAVE_STEP)) + 2
     log_freqs = np.linspace(log_min, log_max, n_steps)
     return np.power(10.0, log_freqs)
