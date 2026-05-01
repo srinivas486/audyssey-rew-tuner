@@ -1,0 +1,44 @@
+{
+  "targetModelName": "X3800H",
+  "ipAddress": "192.168.50.2",
+  "enMultEQType": 2,
+  "subwooferNum": 2,
+  "ampAssign": "11ch",
+  "ampAssignInfo": "0C0403000201000020000000400000000000000000000000000000000202000202020001020304060A0800000001010000",
+  "detectedChannels": [
+    {
+      "commandId": "FL"
+    },
+    {
+      "commandId": "C"
+    },
+    {
+      "commandId": "FR"
+    },
+    {
+      "commandId": "SLA"
+    },
+    {
+      "commandId": "SRA"
+    },
+    {
+      "commandId": "FDL"
+    },
+    {
+      "commandId": "FDR"
+    },
+    {
+      "commandId": "SDL"
+    },
+    {
+      "commandId": "SDR"
+    },
+    {
+      "commandId": "SW1"
+    },
+    {
+      "commandId": "SW2"
+    }
+  ],
+  "hasBassShaker": false
+}

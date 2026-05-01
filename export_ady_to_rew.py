@@ -31,7 +31,9 @@ from rew_exporter import (
     clear_measurements_via_api,
 )
 from target_curve import (
-    generate_house_curve,
+    generate_all_speaker_targets,
+    generate_all_subwoofer_targets,
+    generate_merged_target,
     export_merged_target,
     push_merged_target_via_api,
     TargetCurveParams,
@@ -151,7 +153,9 @@ def main() -> None:
         if args.target_spl is not None:
             params.target_spl_db = args.target_spl
 
-        freqs, house_spl = generate_house_curve(channel_responses, params)
+        sw_targets = generate_all_subwoofer_targets(channel_responses, params)
+        sp_targets = generate_all_speaker_targets(channel_responses, params)
+                freqs, house_spl = generate_merged_target(sp_targets, sw_targets)
 
         if len(freqs) == 0:
             sys.stderr.write("No speaker or subwoofer channels found.\n")
