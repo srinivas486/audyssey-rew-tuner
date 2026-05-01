@@ -46,10 +46,10 @@ MAIN_CHANNEL_IDS = frozenset({"fl", "c", "fr"})
 # All positions measured (0 = MLP primary, 1-7 = adjacent/reference positions)
 ALL_POSITIONS = [str(i) for i in range(8)]
 
-# Frequency grid: 1/6-octave steps from 20 Hz to 20 kHz
-# 1/6 octave ≈ 0.167 decades; 20 Hz → 20kHz is 3 decades = ~18 steps per decade
-# Total ≈ 54 points, which is sufficient for house curve.
-_OCTAVE_STEP = 1.0 / 6.0  # 1/6 octave
+# Frequency grid: 1/12-octave steps from 10 Hz to 20 kHz
+# 1/12 octave ≈ 0.0833 decades/step; 10 Hz → 20kHz is 3.3 decades ≈ 40 steps
+# 42 points is sufficient for house curve while keeping the data lean.
+_OCTAVE_STEP = 1.0 / 12.0  # 1/12 octave
 
 
 def _make_target_frequencies() -> np.ndarray:
